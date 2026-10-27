@@ -1,0 +1,1 @@
+../../skills/paper-motion/references/example-attention.js

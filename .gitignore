@@ -1,0 +1,10 @@
+# paper sources: download again with fetch_paper.py
+examples/*/source/*
+!examples/*/source/meta.json
+# self-check by-products (the contact sheet is kept as the preview)
+*_audit.json
+
+.DS_Store
+__pycache__/
+_frames/
+_grid/

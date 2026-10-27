@@ -1,0 +1,23 @@
+{
+  "arxiv_id": "2010.11929",
+  "title": "An Image is Worth 16x16 Words: Transformers for Image Recognition at Scale",
+  "authors": [
+    "Alexey Dosovitskiy",
+    "Lucas Beyer",
+    "Alexander Kolesnikov",
+    "Dirk Weissenborn",
+    "Xiaohua Zhai",
+    "Thomas Unterthiner",
+    "Mostafa Dehghani",
+    "Matthias Minderer",
+    "Georg Heigold",
+    "Sylvain Gelly",
+    "Jakob Uszkoreit",
+    "Neil Houlsby"
+  ],
+  "published": "2020-10-22",
+  "abs_url": "https://arxiv.org/abs/2010.11929",
+  "pdf_url": "https://arxiv.org/pdf/2010.11929",
+  "fetched_at": "2026-10-26",
+  "pages": 22
+}

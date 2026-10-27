@@ -1,0 +1,23 @@
+{
+  "arxiv_id": "2103.00020",
+  "title": "Learning Transferable Visual Models From Natural Language Supervision",
+  "authors": [
+    "Alec Radford",
+    "Jong Wook Kim",
+    "Chris Hallacy",
+    "Aditya Ramesh",
+    "Gabriel Goh",
+    "Sandhini Agarwal",
+    "Girish Sastry",
+    "Amanda Askell",
+    "Pamela Mishkin",
+    "Jack Clark",
+    "Gretchen Krueger",
+    "Ilya Sutskever"
+  ],
+  "published": "2021-02-26",
+  "abs_url": "https://arxiv.org/abs/2103.00020",
+  "pdf_url": "https://arxiv.org/pdf/2103.00020",
+  "fetched_at": "2026-10-26",
+  "pages": 48
+}
