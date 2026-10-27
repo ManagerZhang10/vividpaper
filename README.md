@@ -1,5 +1,7 @@
 # paper-motion · 3 分钟看懂一篇论文
 
+[![paper-motion：3 分钟看懂一篇论文，用动画](docs/media/hero.png)](https://managerzhang10.github.io/paper-motion/)
+
 **张指导出品。** 给你的 AI 编程助手（Claude Code、Codex 等）装上这个 skill，丢给它一篇论文，它会做出一个约 3 分钟的**动效解读页**：一个双击就能在浏览器里打开的 HTML 文件，用论文自己的图加上动画，一幕一幕讲清这篇论文解决什么问题、核心做法是什么、为什么有效、效果多好。
 
 不是文字总结，也不是 PPT。读一篇论文的摘要要 3 分钟，看完这个动效也是 3 分钟，但看完你能用自己的话把它讲出来。

@@ -8,7 +8,7 @@
 | --- | --- |
 | `skills/paper-motion/` | skill 本体：`SKILL.md`（流程）、`references/`（接口、画法规则、范例 film.js）、`engine/`（pm.js 引擎 + player.html 播放器）、`scripts/`（拉论文、裁图、打包、自查） |
 | `examples/<短名>/` | 做好的 demo：`film.js`、`figures/`、`story.md`、成片 `<短名>.html`、关键帧 `<短名>_sheet.png`。`source/` 只提交 `meta.json` |
-| `index.html`、`docs/media/` | GitHub Pages 在线展示首页和各 demo 的动图片段；demo 改了之后动图要重出 |
+| `index.html`、`docs/media/` | GitHub Pages 在线展示首页、各 demo 的动图片段和 README 主图（`hero.html` → `hero.png`，重出方法写在 hero.html 开头）；demo 改了之后动图和主图要重出 |
 
 `examples/attention/film.js` 是指向 `skills/paper-motion/references/example-attention.js` 的软链，范例只在后者维护。
 
