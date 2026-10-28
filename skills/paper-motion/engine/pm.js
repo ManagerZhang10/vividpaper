@@ -75,6 +75,10 @@ const PM = (() => {
     });
     // recap items come up one by one: every 1.7 s, or once the previous one has been said
     const recapT = []; let u = .6;
+    if ((f.recap || []).length) {   // spoken lead-in under the 「最后回顾」 heading; silent films don't wait for it
+      const say = '我们最后回顾一下', c = clipOf(say);
+      voice.push({ sc: null, t: u, say, clip: c }); if (c) u += c.end + GAP;
+    }
     (f.recap || []).forEach(r => {
       const say = spoken(f, r), c = clipOf(say);
       recapT.push(u); voice.push({ sc: null, t: u, say, clip: c }); u += Math.max(1.7, c ? c.end + GAP : 0);
