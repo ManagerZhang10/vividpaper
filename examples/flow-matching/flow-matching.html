@@ -67,7 +67,7 @@ const PM = (() => {
   const LAYOUTS = {
     card: { W: 1080, H: 1440, ZONE: { top: 130, bottom: 1190, cap: 1300 }, safe: [20, 16, 1060, 1424], capX: [30, 1050], capW: [940, 960],
       head: [56, 72, 700], dy: 0 },
-    portrait: { W: 1080, H: 1920, ZONE: { top: 350, bottom: 1310, cap: 1392 }, safe: [76, 246, 1004, 1484], capX: [80, 1000], capW: [860, 870],
+    portrait: { W: 1080, H: 1920, ZONE: { top: 350, bottom: 1310, cap: 1392 }, safe: [80, 250, 1000, 1480], capX: [80, 1000], capW: [860, 870],
       head: [80, 300, 600], dy: 160 },
   };
   let LY = LAYOUTS.card, W = LY.W, H = LY.H, ZONE = LY.ZONE;   // content lives between ZONE.top and ZONE.bottom; captions below
@@ -96,6 +96,13 @@ const PM = (() => {
   const prog = (t, a, d, e = 'out') => E[e](clamp((t - a) / Math.max(d, 1e-6)));
   const win = (t, a, b, fi = .3, fo = .3) => (t < a || t > b) ? 0 : Math.min(E.out(clamp((t - a) / fi)), 1 - E.in(clamp((t - (b - fo)) / fo)));
   function rgba(hex, a) { const n = parseInt(hex.slice(1), 16); return `rgba(${n >> 16},${(n >> 8) & 255},${n & 255},${a})`; }
+  // how far a colour stands out from the background, 0–255 per channel at most (the measure video-studio safe.py uses)
+  function standout(c, a = 1) {
+    const rgb = s => { let m; if (/^#[0-9a-f]{6}$/i.test(s)) { const n = parseInt(s.slice(1), 16); return [n >> 16, (n >> 8) & 255, n & 255, 1]; }
+      if ((m = /rgba?\(([^)]+)\)/.exec(s))) { const v = m[1].split(',').map(Number); return [v[0], v[1], v[2], v[3] ?? 1]; } return null; };
+    const v = rgb(String(c)), bg = rgb(COL.bg); if (!v) return 255 * a;
+    return Math.max(...[0, 1, 2].map(i => Math.abs(v[i] - bg[i]))) * v[3] * a;
+  }
 
   let C, X, FILM = null, TL = null, LOG = null;
   const IMG = {}, CACHE = {};
@@ -129,14 +136,17 @@ const PM = (() => {
     const voice = [];   // every piece of narration in order: { sc, t (scene-local start), say, clip }
     // intro: the spoken opening — a string said verbatim, or several pieces (string or { text, say }) said one after another;
     // without it, the default lead-in + question
-    const sc = [{ id: 'intro', name: '片头', builtin: 'intro', lines: [], dur: 3.6 }];
+    const sc = [{ id: 'intro', name: '片头', builtin: 'intro', lines: [], segs: [], dur: 3.6 }];
     const intros = f.intro ? [].concat(f.intro).map(o => typeof o === 'string' ? { text: o.trim(), say: o.trim() } : { text: o.text ?? o.say, say: spoken(f, o) })
       : f.question ? [{ text: '这篇论文回答一个问题：' + txt(f.question), say: '这篇论文回答一个问题：' + spoken(f, f.question) }] : [];
     let ui = 1.0;
     intros.forEach(o => {
-      const c = clipOf(o.say); voice.push({ sc: sc[0], t: ui, say: o.say, clip: c }); if (!c) return;
-      // whatever is said in the intro and outro also gets captions (silent films stay as they are)
-      sc[0].lines.push(...chunks(o.text, ui, c.end + .3)); sc[0].dur = Math.max(3.6, ui + c.end + .8); ui += c.end + GAP;
+      const c = clipOf(o.say); voice.push({ sc: sc[0], t: ui, say: o.say, clip: c });
+      // whatever is said in the intro and outro also gets captions; silent films keep the plain title card,
+      // unless introDraw needs the pieces timed (then they run as long as reading them takes)
+      const d = c ? c.end + GAP : f.introDraw ? lineDur(o.text) : null; if (d == null) return;
+      sc[0].lines.push(...chunks(o.text, ui, d - .1)); sc[0].segs.push({ t0: ui, t1: ui + d });
+      sc[0].dur = Math.max(3.6, ui + d + .4); ui += d;
     });
     f.scenes.forEach((s, i) => {
       const lines = [], scene = { ...s, num: i + 1, lines }; let u = s.lead ?? 0.5;
@@ -157,7 +167,13 @@ const PM = (() => {
       const say = spoken(f, r), c = clipOf(say), d = Math.max(1.7, c ? c.end + GAP : 0);
       recapT.push(u); voice.push({ sc: null, t: u, say, clip: c }); if (c) olines.push(...chunks(txt(r), u, d)); u += d;
     });
-    const outro = { id: 'outro', name: '回顾', builtin: 'outro', lines: olines, recapT, dur: u + .6 + 3.2 }; sc.push(outro);
+    // ending: a spoken sign-off after the recap; the credit comes up as it starts
+    let endT = null;
+    if (f.ending) {
+      const say = spoken(f, f.ending), c = clipOf(say); endT = u + .3;
+      voice.push({ sc: null, t: endT, say, clip: c }); if (c) { olines.push(...chunks(txt(f.ending), endT, c.end + GAP)); u = endT + c.end + GAP; }
+    }
+    const outro = { id: 'outro', name: '回顾', builtin: 'outro', lines: olines, recapT, endT, dur: u + .6 + (endT == null ? 3.2 : 1.4) }; sc.push(outro);
     voice.forEach(v => { v.sc = v.sc || outro; });
     let t = 0; sc.forEach(s => { s.t0 = t; t += s.dur; });
     voice.forEach(v => { v.t += v.sc.t0; });
@@ -212,7 +228,8 @@ const PM = (() => {
         if (o.fill) { X.fillStyle = o.fill; X.fill(); }
         if (o.stroke) { X.strokeStyle = o.stroke; X.lineWidth = o.lw ?? 3; X.setLineDash(o.dash || []); X.stroke(); X.setLineDash([]); }
       });
-      if ((o.alpha ?? 1) > 0.05) log('rect', x, y, x + w, y + h);
+      const sp = o.stroke ? (o.lw ?? 3) / 2 : 0, a = X.globalAlpha * (o.alpha ?? 1);
+      if ((o.alpha ?? 1) > 0.05) log('rect', x - sp, y - sp, x + w + sp, y + h + sp, { sp, vs: o.stroke ? standout(o.stroke, a) : 0, vf: o.fill ? standout(o.fill, a) : 0 });
       return { x, y, w, h };
     },
     circle(x, y, r, o = {}) {
@@ -251,6 +268,9 @@ const PM = (() => {
           X.lineTo(b[0] - hs * Math.cos(ang - .45), b[1] - hs * Math.sin(ang - .45)); X.lineTo(b[0] - hs * Math.cos(ang + .45), b[1] - hs * Math.sin(ang + .45)); X.closePath(); X.fill();
         }
       });
+      const sp = Math.max((o.lw ?? 4) / 2, o.head ? o.head * .45 : 0);
+      if ((o.alpha ?? 1) > 0.05) log('line', Math.min(...out.map(p => p[0])) - sp, Math.min(...out.map(p => p[1])) - sp, Math.max(...out.map(p => p[0])) + sp, Math.max(...out.map(p => p[1])) + sp,
+        { sp, vs: standout(o.color ?? COL.sub, X.globalAlpha * (o.alpha ?? 1)), vf: 0 });
     },
     // a figure from figures/; h omitted → keep aspect. card: true puts it on a white card (paper figures are drawn for white).
     img(name, x, y, w, h, o = {}) {
@@ -453,7 +473,10 @@ const PM = (() => {
   function wrapCN(s, size, maxW, base = COL.fg, hl = COL.acc) { return wrapCaption(spans(s, base, hl), size, maxW); }
   // tool: false (local films) drops the tool name and keeps the slogan; the 张指导出品 credit always stays
   const tag = () => FILM.tool === false ? SLOGAN : `${TOOL} · ${SLOGAN}`;
-  function intro(t) {
+  // top-right corner of every frame advertises the tool; local films keep the credit
+  const corner = () => brandMark(W - LY.head[0], LY.head[1], 26, .9, 'right', FILM.tool === false ? BRAND : TOOL);
+  function intro(t, sc) {
+    if (FILM.introDraw) return introPic(t, sc);
     const p = FILM.paper || {}, a0 = prog(t, 0, .7), dy = LY.dy;   // both layouts are 1080 wide; portrait moves everything down by dy
     brandMark(80, 140 + dy, 40, prog(t, .2, .6), 'left');
     D.text(tag(), 80, 214 + dy, { size: 28, align: 'left', color: COL.dim, alpha: .5 + .5 * a0 });
@@ -466,6 +489,18 @@ const PM = (() => {
     D.text('这篇论文回答一个问题', 80, yb + 200, { size: 32, align: 'left', color: COL.dim, alpha: q });
     wrapCN(txt(FILM.question || ''), 56, 920, COL.acc, COL.fg).forEach((ln, i) => rich(ln, 80, yb + 285 + i * 80 + (1 - q) * 24, { size: 56, weight: 700, align: 'left', alpha: q }));
   }
+  // intro with a picture (film.js introDraw(g)): the title starts big, then within the first second shrinks into a header
+  // at the top and introDraw owns the rest of the frame; g.p(.45, .8, 'io') is the same shrink, so the picture can move with it
+  function introPic(t, sc) {
+    const p = FILM.paper || {}, k = prog(t, .45, .8, 'io'), dy = LY.dy;
+    const tl = wrapWords(p.title || '', 64, 920), sz = lerp(64, 30, k), lh = sz * 1.22, y0 = lerp(270 + dy, 170 + dy, k);
+    tl.forEach((s, i) => D.text(s, 80, y0 + i * lh, { size: sz, weight: 800, font: 'disp', align: 'left', color: k > .5 ? COL.sub : COL.fg }));
+    const yb = y0 + tl.length * lh;
+    D.line(80, yb - 6, 80 + 240 * prog(t, .1, .4), yb - 6, { color: COL.acc, lw: 6, alpha: 1 - k });
+    D.text(p.byline || '', 80, yb + lerp(36, 10, k), { size: lerp(30, 22, k), align: 'left', color: COL.sub });
+    corner();
+    FILM.introDraw(G(sc, t));
+  }
   function outro(t, sc) {
     const r = FILM.recap || [], dy = LY.dy * .75;
     D.text('最后回顾', 80, 220 + dy, { size: 34, align: 'left', color: COL.dim, alpha: prog(t, 0, .5) });
@@ -476,7 +511,7 @@ const PM = (() => {
       const ls = wrapCN(s, 40, 840);
       ls.forEach((ln, j) => rich(ln, 170, y + j * 56 - (ls.length - 1) * 28, { size: 40, align: 'left', alpha: a }));
     });
-    const b = prog(t, sc.dur - 3.0, .7);
+    const b = prog(t, sc.endT ?? sc.dur - 3.0, .7);
     D.line(80, 970 + dy, 80 + 920 * b, 970 + dy, { color: COL.faint, lw: 2 });
     brandMark(W / 2, 1050 + dy, 56, b, 'center');
     D.text(tag(), W / 2, 1125 + dy, { size: 30, color: COL.dim, alpha: b });
@@ -491,7 +526,7 @@ const PM = (() => {
     const fade = (sc.id === 'intro' ? 1 : clamp(lt / .35)) * clamp((sc.dur - lt) / .3);
     X.save(); X.globalAlpha = fade;
     try {
-      if (sc.builtin === 'intro') intro(lt);
+      if (sc.builtin === 'intro') intro(lt, sc);
       else if (sc.builtin === 'outro') outro(lt, sc);
       else { header(sc, 1); sc.draw(G(sc, lt)); }
     } catch (e) {
@@ -501,11 +536,12 @@ const PM = (() => {
     X.restore();
     if (SNAP) SNAP(sc, lt);
     caption(sc, lt);
-    if (!sc.builtin) brandMark(W - LY.head[0], LY.head[1], 26, .9, 'right', FILM.tool === false ? BRAND : TOOL);   // the corner advertises the tool; local films keep the credit
+    if (!sc.builtin) corner();
   }
   function G(sc, t) {
-    const L = i => { if (!sc.lines[i]) throw new Error(`L(${i}) 超出「${sc.id}」的字幕条数 ${sc.lines.length}`); return sc.lines[i].t0; };
-    const Le = i => { L(i); return sc.lines[i].t1; };
+    const ls = sc.segs || sc.lines;   // in introDraw, i counts spoken intro pieces, not caption chunks
+    const L = i => { if (!ls[i]) throw new Error(`L(${i}) 超出「${sc.id}」的${sc.segs ? '开场白段数' : '字幕条数'} ${ls.length}`); return ls[i].t0; };
+    const Le = i => { L(i); return ls[i].t1; };
     return { ...D, t, dur: sc.dur, W, H, COL, E, ZONE, ctx: X, clamp, lerp, rgba, L, Le,
       p: (a, d = .5, e = 'out') => prog(t, a, d, e), win: (a, b, fi, fo) => win(t, a, b, fi, fo) };
   }
@@ -521,7 +557,10 @@ const PM = (() => {
   // ---------- voice track ----------
   // All clips mixed into one track at their places on the timeline, so a single <audio> can seek, run at 2× and be unlocked by one tap.
   async function voiceTrack() {
-    const items = TL.voice.filter(v => v.clip); if (!items.length) return null;
+    const items = TL.voice.filter(v => v.clip);
+    // an exporter may hand in one pre-mixed track (e.g. voice + music, the same mix as its video): play that instead
+    if (window.PM_TRACK) return { url: URL.createObjectURL(await (await fetch(window.PM_TRACK)).blob()), clips: items.length, seconds: TL.total };
+    if (!items.length) return null;
     const rate = 24000, ac = new OfflineAudioContext(1, 1, rate), out = new Float32Array(Math.ceil(TL.total * rate));
     for (const v of items) {
       const bytes = Uint8Array.from(atob(v.clip.src.split(',')[1]), c => c.charCodeAt(0));
@@ -566,7 +605,19 @@ const PM = (() => {
       render(t);
       const capOn = sc.lines.some(l => t - sc.t0 >= l.t0 && t - sc.t0 < l.t1);
       for (const it of LOG.items) {
-        if (it.kind === 'rect' || it.kind === 'caption') { if (it.kind === 'caption' && (it.x0 < LY.capX[0] || it.x1 > LY.capX[1])) warn('出界', '字幕' + edge); continue; }
+        if (it.kind === 'caption') { if (it.x0 < LY.capX[0] || it.x1 > LY.capX[1]) warn('出界', '字幕' + edge); continue; }
+        // boxes and lines (stroke included), judged the way video-studio safe.py sees them: it scales the frame down 4× and flags
+        // a band once enough of it differs from the background by > 48 — about 60 px along a side edge, 140 px along the top,
+        // 240 px along the bottom. So a 1.5 px orange stroke down a tall box counts; a short one, a faint panel edge or a round
+        // line cap poking out does not
+        if (it.kind === 'rect' || it.kind === 'line') {
+          if (FILM.layout !== 'portrait') continue;
+          const h = it.y1 - it.y0, w = it.x1 - it.x0;
+          const over = Math.max(h >= 60 ? Math.max(sx0 - it.x0, it.x1 - sx1) : 0, w >= 140 ? sy0 - it.y0 : 0, w >= 240 ? it.y1 - sy1 : 0);
+          const vis = over > it.sp ? Math.max(it.vs, it.vf) : it.vs;
+          if (over > 1 && vis * Math.min(1, over / 4) > 48) warn('出界', `${it.kind === 'rect' ? '方框' : '线条'}伸出安全区约 ${Math.round(over)} px（描边算在内）`);
+          continue;
+        }
         if (it.x0 < sx0 || it.x1 > sx1 || it.y0 < sy0 || it.y1 > sy1) warn('出界', `${it.kind}「${(it.s || '').slice(0, 16)}」${edge}`);
         if (it.size && it.size < (it.kind === 'note' ? 20 : 22)) warn('字太小', `「${(it.s || '').slice(0, 16)}」只有 ${it.size}px`);
         if (capOn && !sc.builtin && it.kind !== 'brand' && it.kind !== 'chrome' && it.y1 > ZONE.bottom + 20) warn('压字幕', `${it.kind}「${(it.s || '').slice(0, 12)}」伸进字幕区（y>${ZONE.bottom}）`);
