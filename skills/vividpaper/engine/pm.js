@@ -61,9 +61,12 @@ const PM = (() => {
   const clipOf = s => (window.PM_VOICE && window.PM_VOICE.clips[s]) || null;
   function timeline(f) {
     const voice = [];   // every piece of narration in order: { sc, t (scene-local start), say, clip }
-    const qSay = f.question ? '这篇论文回答一个问题：' + spoken(f, f.question) : '', qc = clipOf(qSay);
+    // intro: the whole spoken opening, said verbatim (e.g. who wrote it and what it answers); otherwise the default lead-in + question
+    const qSay = f.intro ? f.intro.trim() : f.question ? '这篇论文回答一个问题：' + spoken(f, f.question) : '', qc = clipOf(qSay);
     const sc = [{ id: 'intro', name: '片头', builtin: 'intro', lines: [], dur: qc ? Math.max(3.6, 1.0 + qc.end + 0.8) : 3.6 }];
     if (qSay) voice.push({ sc: sc[0], t: 1.0, say: qSay, clip: qc });
+    // whatever is said in the intro and outro also gets captions (silent films stay as they are)
+    if (qc) sc[0].lines = chunks(f.intro ? f.intro.trim() : '这篇论文回答一个问题：' + txt(f.question), 1.0, qc.end + .3);
     f.scenes.forEach((s, i) => {
       const lines = [], scene = { ...s, num: i + 1, lines }; let u = s.lead ?? 0.5;
       (s.lines || []).forEach(l => {
@@ -74,20 +77,31 @@ const PM = (() => {
       scene.dur = u + (s.tail ?? 0.8); sc.push(scene);
     });
     // recap items come up one by one: every 1.7 s, or once the previous one has been said
-    const recapT = []; let u = .6;
+    const recapT = [], olines = []; let u = .6;
     if ((f.recap || []).length) {   // spoken lead-in under the 「最后回顾」 heading; silent films don't wait for it
       const say = '我们最后回顾一下', c = clipOf(say);
-      voice.push({ sc: null, t: u, say, clip: c }); if (c) u += c.end + GAP;
+      voice.push({ sc: null, t: u, say, clip: c }); if (c) { olines.push(...chunks(say, u, c.end + GAP)); u += c.end + GAP; }
     }
     (f.recap || []).forEach(r => {
-      const say = spoken(f, r), c = clipOf(say);
-      recapT.push(u); voice.push({ sc: null, t: u, say, clip: c }); u += Math.max(1.7, c ? c.end + GAP : 0);
+      const say = spoken(f, r), c = clipOf(say), d = Math.max(1.7, c ? c.end + GAP : 0);
+      recapT.push(u); voice.push({ sc: null, t: u, say, clip: c }); if (c) olines.push(...chunks(txt(r), u, d)); u += d;
     });
-    const outro = { id: 'outro', name: '回顾', builtin: 'outro', lines: [], recapT, dur: u + .6 + 3.2 }; sc.push(outro);
+    const outro = { id: 'outro', name: '回顾', builtin: 'outro', lines: olines, recapT, dur: u + .6 + 3.2 }; sc.push(outro);
     voice.forEach(v => { v.sc = v.sc || outro; });
     let t = 0; sc.forEach(s => { s.t0 = t; t += s.dur; });
     voice.forEach(v => { v.t += v.sc.t0; });
     return { scenes: sc, total: t, voice };
+  }
+  // a spoken passage → caption lines of ≤ 28 characters, cut at punctuation, each up as long as its share of the text
+  function chunks(text, t0, dur) {
+    const len = s => s.replace(/\*\*/g, '').length, out = [];
+    (text.match(/[^。！？；，、：]+[。！？；，、：]?/g) || [text]).forEach(p => {
+      const last = out[out.length - 1];   // a new sentence always starts a new caption
+      if (last && !/[。！？]$/.test(last) && len(last + p) <= 28) out[out.length - 1] += p; else out.push(p);
+    });
+    for (let i = 0; i + 1 < out.length; i++) if ((out[i].match(/\*\*/g) || []).length % 2) { out[i] += '**'; out[i + 1] = '**' + out[i + 1]; }   // a **highlight** cut in two stays highlighted on both sides
+    const n = out.reduce((a, s) => a + len(s), 0) || 1; let u = t0;
+    return out.map(s => { const d = dur * len(s) / n, l = { text: s.replace(/[，、：；。]$/, ''), t0: u, t1: u + d }; u += d; return l; });
   }
   function sceneAt(t) { const s = TL.scenes; for (let i = s.length - 1; i >= 0; i--) if (t >= s[i].t0) return s[i]; return s[0]; }
 
@@ -369,6 +383,7 @@ const PM = (() => {
   const tag = () => FILM.tool === false ? SLOGAN : `${TOOL} · ${SLOGAN}`;
   function intro(t) {
     const p = FILM.paper || {}, a0 = prog(t, 0, .7);
+    brandMark(80, 140, 40, prog(t, .2, .6), 'left');
     D.text(tag(), 80, 214, { size: 28, align: 'left', color: COL.dim, alpha: .5 + .5 * a0 });
     const tl = wrapWords(p.title || '', 84, 920);
     tl.forEach((s, i) => D.text(s, 80, 360 + i * 104 + (1 - a0) * 30, { size: 84, weight: 800, font: 'disp', align: 'left', alpha: .35 + .65 * a0 }));
@@ -378,7 +393,6 @@ const PM = (() => {
     const q = prog(t, 1.0, .7);
     D.text('这篇论文回答一个问题', 80, yb + 200, { size: 32, align: 'left', color: COL.dim, alpha: q });
     wrapCN(txt(FILM.question || ''), 56, 920, COL.acc, COL.fg).forEach((ln, i) => rich(ln, 80, yb + 285 + i * 80 + (1 - q) * 24, { size: 56, weight: 700, align: 'left', alpha: q }));
-    brandMark(80, 1300, 40, prog(t, .2, .6), 'left');
   }
   function outro(t, sc) {
     const r = FILM.recap || [];
@@ -391,9 +405,9 @@ const PM = (() => {
       ls.forEach((ln, j) => rich(ln, 170, y + j * 56 - (ls.length - 1) * 28, { size: 40, align: 'left', alpha: a }));
     });
     const b = prog(t, sc.dur - 3.0, .7);
-    D.line(80, 1180, 80 + 920 * b, 1180, { color: COL.faint, lw: 2 });
-    brandMark(W / 2, 1270, 56, b, 'center');
-    D.text(tag(), W / 2, 1350, { size: 30, color: COL.dim, alpha: b });
+    D.line(80, 970, 80 + 920 * b, 970, { color: COL.faint, lw: 2 });
+    brandMark(W / 2, 1050, 56, b, 'center');
+    D.text(tag(), W / 2, 1125, { size: 30, color: COL.dim, alpha: b });
   }
 
   // ---------- one frame ----------
@@ -599,10 +613,11 @@ const PM = (() => {
     }
     if (q.has('audit')) { document.body.className = 'still'; return runAudit(q); }
     if (q.has('still')) { document.body.className = 'still'; render(+q.get('t') || 0); document.title = 'READY'; return; }
+    if (q.has('capture')) { document.body.className = 'still'; await document.fonts.ready; render(0); document.title = 'READY'; return; }   // for exporters: PM.render / PM.timeline, no player
     let track = null;
     try { track = await voiceTrack(); } catch (e) { console.error('配音音轨合成失败，改为无声播放', e); }
     player(track);
   }
 
-  return { film: f => { FILM = f; const ft = f.tool === false && document.getElementById('foot'); if (ft && ft.firstChild) ft.firstChild.nodeValue = BRAND; }, boot, W, H, COL };
+  return { render: t => render(t), timeline: () => TL, film: f => { FILM = f; const ft = f.tool === false && document.getElementById('foot'); if (ft && ft.firstChild) ft.firstChild.nodeValue = BRAND; }, boot, W, H, COL };
 })();

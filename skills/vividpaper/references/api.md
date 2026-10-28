@@ -7,6 +7,7 @@ PM.film({
   paper: { title: 'Attention Is All You Need', byline: 'Vaswani 等 · Google · NIPS 2017', arxiv: '1706.03762' },
   tool: false,                                                // 可选：不显示「VividPaper」字样（本地自用的片子），「张指导出品」照旧
   question: '翻译模型能不能**完全不用 RNN**，只靠注意力？',   // 片头的主线问题，**…** 是强调色
+  intro: '今天我们来讲 Google 的 Transformer……',               // 可选：片头念的整段开场白（原样念），替换默认的「这篇论文回答一个问题：」+ question
   recap: ['…', '…', '…'],                                     // 片尾「最后回顾」，3–4 条，每条 ≤ 25 字
   pronounce: { 'RoFormer': 'Roformer', '−': '减' },            // 可选，配音时的统一念法替换（见下文「配音」）
   scenes: [
@@ -42,6 +43,14 @@ draw(g) 必须是 t 的纯函数：不用 `Date.now()`、`Math.random()`（要�
 - `pronounce`：整部片统一的念法替换，`{ 原文: 念法 }`，对所有没写 `say` 的句子生效。常用：`'−': '减'`（否则 m − n 会念成「m 负 n」）、逐字母念的英文名换成读得顺的写法。
 - 改了 `text`、`say` 或 `pronounce` 后重跑 voice.py：只重新合成变了的句子。没重跑就 build，check 会报「配音」。
 - 动作要等「念到」再出：`g.lerp(g.L(i), g.Le(i), .6)` 是第 i 句念到六成的时刻，配不配音都对得上。
+- 片头的开场白、片尾的「我们最后回顾一下」和每条回顾，配了音就自动出字幕：长的按标点切成 28 字以内的几段，按字数分时间。
+
+## 导出接口（给转视频之类的外部工具用）
+
+- 打开成片时带 `?capture`：只加载、画第 0 秒，不起播放器、不解码配音；`document.title` 变成 `READY` 就可以开始截。
+- `PM.render(t)`：把第 t 秒画到 `<canvas id="pm">`（1080×1440）。
+- `PM.timeline()`：时间轴。`scenes[i].t0 / dur`（秒）、`scenes[i].lines[j].text / t0 / t1`（字幕，相对本幕起点）；`voice[k].t`（这段配音在全片的起点）、`voice[k].say`、`voice[k].clip`（`src` 音频 data URL、`end` 念完的时刻）。
+- 版面约定：每一幕（含片头片尾）y ≤ 1190 是画面（章节标题、署名、内容），y > 1190 只放字幕。所以外部工具可以只取上面 1190 行，自己按别的尺寸重排字幕。
 
 ## 画布
 
