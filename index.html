@@ -3,11 +3,11 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>paper-motion · 3 分钟看懂一篇论文 · 张指导出品</title>
-<meta name="description" content="把一篇论文做成约 3 分钟的动效解读页：论文原图加动画，一幕一幕讲清它解决什么问题、怎么做、为什么有效。">
-<meta property="og:title" content="paper-motion · 3 分钟看懂一篇论文">
+<title>VividPaper · 视觉化读论文 · 张指导出品</title>
+<meta name="description" content="VividPaper 视觉化读论文：把一篇论文做成带配音的动效解读页，论文原图加动画，一幕一幕讲清它解决什么问题、怎么做、为什么有效。">
+<meta property="og:title" content="VividPaper · 视觉化读论文">
 <meta property="og:description" content="论文原图加动效，一幕一幕讲清它解决什么问题、怎么做、为什么有效。">
-<meta property="og:image" content="https://managerzhang10.github.io/paper-motion/docs/media/hero.png">
+<meta property="og:image" content="https://managerzhang10.github.io/vividpaper/docs/media/hero.png">
 <meta name="twitter:card" content="summary_large_image">
 <style>
   :root { --bg:#070709; --card:#111115; --fg:#F4F3EF; --dim:#8A8A92; --line:#26262C; --acc:#FF6A2C; }
@@ -42,37 +42,45 @@
 <body>
 <div class="wrap">
   <span class="brand">张指导出品</span>
-  <h1>3 分钟看懂一篇论文，<em>用动画</em></h1>
-  <p class="lead">不是文字总结，也不是 PPT。用论文自己的图加上动效，一幕一幕讲清它解决什么问题、核心做法是什么、为什么有效。点开就能看，支持拖进度、按章节跳、2× / 4× 倍速。</p>
+  <h1>视觉化读论文，<em>用动画</em></h1>
+  <p class="lead">不是文字总结，也不是 PPT。用论文自己的图加上动效，一幕一幕讲清它解决什么问题、核心做法是什么、为什么有效。点开就能看，带配音，支持拖进度、按章节跳、2× / 4× 倍速。</p>
   <div class="cta">
     <a class="btn main" href="examples/attention/attention.html">先看一部：Transformer</a>
-    <a class="btn" href="https://github.com/ManagerZhang10/paper-motion">GitHub · 给你的 Agent 装上它</a>
+    <a class="btn" href="https://github.com/ManagerZhang10/vividpaper">GitHub · 给你的 Agent 装上它</a>
   </div>
 
   <div class="grid">
     <a class="card" href="examples/attention/attention.html">
       <img src="docs/media/attention.gif" alt="Transformer 动效片段" loading="lazy">
-      <div class="meta"><div class="name">Attention Is All You Need</div><div class="q">翻译模型能不能完全不用 RNN，只靠注意力？</div><div class="foot"><span>Transformer · 2017 · 2:30</span><b>在线看 →</b></div></div>
+      <div class="meta"><div class="name">Attention Is All You Need</div><div class="q">翻译模型能不能完全不用 RNN，只靠注意力？</div><div class="foot"><span>Transformer · 2017 · 2:54</span><b>在线看 →</b></div></div>
     </a>
     <a class="card" href="examples/resnet/resnet.html">
       <img src="docs/media/resnet.gif" alt="ResNet 动效片段" loading="lazy">
-      <div class="meta"><div class="name">Deep Residual Learning</div><div class="q">网络越堆越深，为什么反而越训越差？</div><div class="foot"><span>ResNet · 2015 · 2:39</span><b>在线看 →</b></div></div>
+      <div class="meta"><div class="name">Deep Residual Learning</div><div class="q">网络越堆越深，为什么反而越训越差？</div><div class="foot"><span>ResNet · 2015 · 3:24</span><b>在线看 →</b></div></div>
     </a>
     <a class="card" href="examples/vit/vit.html">
       <img src="docs/media/vit.gif" alt="ViT 动效片段" loading="lazy">
-      <div class="meta"><div class="name">An Image is Worth 16x16 Words</div><div class="q">图像能不能像句子一样，直接交给 Transformer？</div><div class="foot"><span>ViT · 2020 · 2:50</span><b>在线看 →</b></div></div>
+      <div class="meta"><div class="name">An Image is Worth 16x16 Words</div><div class="q">图像能不能像句子一样，直接交给 Transformer？</div><div class="foot"><span>ViT · 2020 · 3:31</span><b>在线看 →</b></div></div>
     </a>
     <a class="card" href="examples/ddpm/ddpm.html">
       <img src="docs/media/ddpm.gif" alt="DDPM 动效片段" loading="lazy">
-      <div class="meta"><div class="name">Denoising Diffusion Probabilistic Models</div><div class="q">怎么从纯噪声一步步「洗」出一张图？</div><div class="foot"><span>DDPM · 2020 · 2:33</span><b>在线看 →</b></div></div>
+      <div class="meta"><div class="name">Denoising Diffusion Probabilistic Models</div><div class="q">怎么从纯噪声一步步「洗」出一张图？</div><div class="foot"><span>DDPM · 2020 · 3:18</span><b>在线看 →</b></div></div>
     </a>
     <a class="card" href="examples/clip/clip.html">
       <img src="docs/media/clip.gif" alt="CLIP 动效片段" loading="lazy">
-      <div class="meta"><div class="name">Learning Transferable Visual Models</div><div class="q">不给人工标签，模型能不能光靠网上的图文配对学会认图？</div><div class="foot"><span>CLIP · 2021 · 2:56</span><b>在线看 →</b></div></div>
+      <div class="meta"><div class="name">Learning Transferable Visual Models</div><div class="q">不给人工标签，模型能不能光靠网上的图文配对学会认图？</div><div class="foot"><span>CLIP · 2021 · 3:37</span><b>在线看 →</b></div></div>
+    </a>
+    <a class="card" href="examples/rope/rope.html">
+      <img src="docs/media/rope.gif" alt="RoPE 动效片段" loading="lazy">
+      <div class="meta"><div class="name">RoFormer: Rotary Position Embedding</div><div class="q">注意力分不清词序，怎样让分数只看两个词隔多远？</div><div class="foot"><span>RoPE · 2021 · 3:49</span><b>在线看 →</b></div></div>
+    </a>
+    <a class="card" href="examples/flow-matching/flow-matching.html">
+      <img src="docs/media/flow-matching.gif" alt="Flow Matching 动效片段" loading="lazy">
+      <div class="meta"><div class="name">Flow Matching for Generative Modeling</div><div class="q">一团噪声要流成数据，每一点该往哪走，怎么教给模型？</div><div class="foot"><span>Flow Matching · 2022 · 3:48</span><b>在线看 →</b></div></div>
     </a>
   </div>
 
-  <p class="keys">打开后：<kbd>空格</kbd> 播放 / 暂停　<kbd>←</kbd> <kbd>→</kbd> 跳 5 秒　<kbd>1</kbd> <kbd>2</kbd> <kbd>4</kbd> 切倍速　右侧章节直接跳</p>
+  <p class="keys">打开后：<kbd>空格</kbd> 播放 / 暂停　<kbd>←</kbd> <kbd>→</kbd> 跳 5 秒　<kbd>1</kbd> <kbd>2</kbd> <kbd>4</kbd> 切倍速　<kbd>M</kbd> 开关声音　右侧章节直接跳</p>
   <footer>代码 MIT。示例中的论文插图版权归原作者，仅用于解读，并在画面上注明出处。</footer>
 </div>
 </body>

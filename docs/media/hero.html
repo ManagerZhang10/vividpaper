@@ -2,7 +2,7 @@
 <!--
   README 主图 hero.png 的源文件。重出：
   1. 每个 demo 导一帧到 docs/media/_frames/<短名>.png（时刻见下方 CARDS 的 t）：
-     python3 skills/paper-motion/scripts/check.py examples/<短名>/<短名>.html --at <t>（vit 用 46.5）
+     python3 skills/vividpaper/scripts/check.py examples/<短名>/<短名>.html --at <t>
      然后把 examples/<短名>/_frames/<短名>_t<t>.png 挪过来。
   2. Chrome 截图：--headless=new --window-size=1280,640 --force-device-scale-factor=2 --screenshot=docs/media/hero.png docs/media/hero.html
 -->
@@ -32,7 +32,7 @@
           border:1px solid var(--line); background:#101014; border-radius:999px; padding:9px 18px; }
   .pill span { color:var(--acc); }
   .feat { font-size:17px; color:var(--dim); }
-  .row { position:absolute; left:0; right:0; bottom:40px; display:flex; justify-content:center; align-items:flex-end; gap:28px; }
+  .row { position:absolute; left:0; right:0; bottom:40px; display:flex; justify-content:center; align-items:flex-end; gap:18px; }
   .card { display:flex; flex-direction:column; gap:10px; }
   .shot { border-radius:12px; overflow:hidden; border:1px solid var(--line); background:#000; box-shadow:0 18px 40px rgba(0,0,0,.55); }
   .shot img { display:block; width:100%; height:100%; object-fit:cover; }
@@ -41,28 +41,30 @@
   .bar .fill { position:absolute; left:0; top:0; bottom:0; border-radius:2px; background:var(--acc); }
   .bar .tick { position:absolute; top:-2px; width:1px; height:8px; background:#4a4a52; }
   .bar .dot { position:absolute; top:-4px; width:12px; height:12px; margin-left:-6px; border-radius:50%; background:var(--acc); }
-  .lab { display:flex; justify-content:space-between; font-size:15px; color:var(--dim); }
+  .lab { display:flex; justify-content:space-between; gap:8px; white-space:nowrap; font-size:15px; color:var(--dim); }
   .lab b { color:var(--fg); font-weight:600; }
   .card.main .lab b { color:var(--acc); }
 </style>
 </head>
 <body>
   <div class="head">
-    <div class="brand"><i></i><b>paper-motion</b>· 张指导出品</div>
-    <h1>3 分钟看懂一篇论文，<em>用动画</em></h1>
+    <div class="brand"><i></i><b>VividPaper</b>· 张指导出品</div>
+    <h1>视觉化读论文，<em>用动画</em></h1>
     <div class="sub">
-      <div class="pill"><span>$</span> npx skills add ManagerZhang10/paper-motion</div>
-      <div class="feat">论文原图 + 动效 · 拖进度 · 按章节跳 · 2× / 4× 倍速</div>
+      <div class="pill"><span>$</span> npx skills add ManagerZhang10/vividpaper</div>
+      <div class="feat">论文原图 + 动效 · 一键配音 · 按章节跳 · 2× / 4× 倍速</div>
     </div>
   </div>
   <div class="row" id="row"></div>
 <script>
 const CARDS = [
-  { n:'attention', d:'2:30', k:'Transformer', t:49, w:188, scenes:[3.6,22.4,40.5,64.9,82.6,98.6,121.7,138.4], total:149.6 },
-  { n:'resnet', d:'2:39',    k:'ResNet',      t:54, w:204, scenes:[3.6,23.7,44.7,68.8,91.6,111.9,129.6,148.3], total:159.5 },
-  { n:'vit', d:'2:50',       k:'ViT',         t:46.5, w:236, scenes:[3.6,26.7,47.6,69.9,93.0,116.5,141.1,159.1], total:170.3, main:true },
-  { n:'ddpm', d:'2:33',      k:'DDPM',        t:15, w:204, scenes:[3.6,29.0,52.8,79.6,101.8,124.2,142.6], total:153.8 },
-  { n:'clip', d:'2:56',      k:'CLIP',        t:72, w:188, scenes:[3.6,24.4,40.1,61.8,85.4,108.8,130.7,146.3,165.0], total:176.2 },
+  { n:'attention', d:'2:54', k:'Transformer', t:53.7, w:136, scenes:[6.8,26.1,46.1,73,91.6,107.4,132.3,150.4], total:174.8 },
+  { n:'resnet', d:'3:24', k:'ResNet', t:60.7, w:150, scenes:[6.2,30.0,53.1,81.5,106.2,133.3,155.5,180.7], total:204.7 },
+  { n:'rope', d:'3:49', k:'RoPE', t:47.4, w:166, scenes:[7.0,34.8,63.7,93.0,125.1,156.8,186.6,206.2], total:229.4 },
+  { n:'vit', d:'3:31', k:'ViT', t:40.3, w:220, scenes:[6.7,32.7,57.1,82.0,106.4,133.5,164.7,187.2], total:211.6, main:true },
+  { n:'ddpm', d:'3:18', k:'DDPM', t:19.4, w:166, scenes:[6.1,35.6,64.3,96.9,123.0,148.7,175.2], total:199.0 },
+  { n:'flow-matching', d:'3:48', k:'Flow Matching', t:33.1, w:150, scenes:[7.5,34.8,61.4,91.4,122.5,155.9,180.5,206.0], total:228.3 },
+  { n:'clip', d:'3:37', k:'CLIP', t:77.3, w:136, scenes:[7.7,30.1,47.4,69.7,94.7,120.0,143.9,166.6,193.9], total:217.4 },
 ];
 const mmss = s => `${Math.floor(s / 60)}:${String(Math.floor(s % 60)).padStart(2, '0')}`;
 document.getElementById('row').innerHTML = CARDS.map(c => {
@@ -71,7 +73,7 @@ document.getElementById('row').innerHTML = CARDS.map(c => {
   return `<div class="card${c.main ? ' main' : ''}" style="width:${c.w}px">
     <div class="shot" style="height:${c.w * 4 / 3}px"><img src="_frames/${c.n}.png"></div>
     <div class="bar">${ticks}<i class="fill" style="width:${p}%"></i><i class="dot" style="left:${p}%"></i></div>
-    <div class="lab"><b>${c.k}</b><span>${mmss(c.t)} / ${c.d}</span></div>
+    <div class="lab"><b>${c.k}</b><span>${c.main ? mmss(c.t) + ' / ' : ''}${c.d}</span></div>
   </div>`;
 }).join('');
 </script>

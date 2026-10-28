@@ -1,1 +1,1 @@
-../../skills/paper-motion/references/example-attention.js
+../../skills/vividpaper/references/example-attention.js

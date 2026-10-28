@@ -1,0 +1,19 @@
+{
+  "arxiv_id": "2104.09864",
+  "title": "RoFormer: Enhanced Transformer with Rotary Position Embedding",
+  "authors": [
+    "Jianlin Su",
+    "Yu Lu",
+    "Shengfeng Pan",
+    "Ahmed Murtadha",
+    "Bo Wen",
+    "Yunfeng Liu"
+  ],
+  "published": "2021-04-20",
+  "abs_url": "https://arxiv.org/abs/2104.09864",
+  "pdf_url": "https://arxiv.org/pdf/2104.09864",
+  "comment": "fixed some typos",
+  "journal_ref": null,
+  "fetched_at": "2026-10-28",
+  "pages": 14
+}
