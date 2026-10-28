@@ -3,7 +3,15 @@
 // No CSS animation and no real clock inside draw(); that is what makes seeking, 4× and the self-check work.
 'use strict';
 const PM = (() => {
-  const W = 1080, H = 1440;
+  // two layouts. Default: the 3:4 web page. portrait: a native 9:16 video frame where everything visible stays inside the
+  // short-video safe area x 80–1000, y 250–1480 (player UI covers the rest); film.js picks it with layout: 'portrait'
+  const LAYOUTS = {
+    card: { W: 1080, H: 1440, ZONE: { top: 130, bottom: 1190, cap: 1300 }, safe: [20, 16, 1060, 1424], capX: [30, 1050], capW: [940, 960],
+      head: [56, 72, 700], dy: 0 },
+    portrait: { W: 1080, H: 1920, ZONE: { top: 350, bottom: 1310, cap: 1392 }, safe: [76, 246, 1004, 1484], capX: [80, 1000], capW: [860, 870],
+      head: [80, 300, 600], dy: 160 },
+  };
+  let LY = LAYOUTS.card, W = LY.W, H = LY.H, ZONE = LY.ZONE;   // content lives between ZONE.top and ZONE.bottom; captions below
   const BRAND = '张指导出品', TOOL = 'VividPaper', SLOGAN = '3 分钟看懂一篇论文';
   const COL = {
     bg: '#0B0B0E', panel: '#15151A', fg: '#F4F3EF', sub: '#C9C9CF', dim: '#8A8A92', faint: '#3A3A42', line: '#26262C',
@@ -15,7 +23,6 @@ const PM = (() => {
     mono: (s, w) => `${w} ${s}px ui-monospace,"SF Mono",Menlo,Consolas,monospace`,
     disp: (s, w) => `${w} ${s}px -apple-system,"SF Pro Display","Helvetica Neue",Arial,${CN}`,
   };
-  const ZONE = { top: 130, bottom: 1190, cap: 1300 };   // content lives between top and bottom; captions below
 
   // ---------- math ----------
   const clamp = (v, a = 0, b = 1) => Math.min(b, Math.max(a, v));
@@ -61,12 +68,17 @@ const PM = (() => {
   const clipOf = s => (window.PM_VOICE && window.PM_VOICE.clips[s]) || null;
   function timeline(f) {
     const voice = [];   // every piece of narration in order: { sc, t (scene-local start), say, clip }
-    // intro: the whole spoken opening, said verbatim (e.g. who wrote it and what it answers); otherwise the default lead-in + question
-    const qSay = f.intro ? f.intro.trim() : f.question ? '这篇论文回答一个问题：' + spoken(f, f.question) : '', qc = clipOf(qSay);
-    const sc = [{ id: 'intro', name: '片头', builtin: 'intro', lines: [], dur: qc ? Math.max(3.6, 1.0 + qc.end + 0.8) : 3.6 }];
-    if (qSay) voice.push({ sc: sc[0], t: 1.0, say: qSay, clip: qc });
-    // whatever is said in the intro and outro also gets captions (silent films stay as they are)
-    if (qc) sc[0].lines = chunks(f.intro ? f.intro.trim() : '这篇论文回答一个问题：' + txt(f.question), 1.0, qc.end + .3);
+    // intro: the spoken opening — a string said verbatim, or several pieces (string or { text, say }) said one after another;
+    // without it, the default lead-in + question
+    const sc = [{ id: 'intro', name: '片头', builtin: 'intro', lines: [], dur: 3.6 }];
+    const intros = f.intro ? [].concat(f.intro).map(o => typeof o === 'string' ? { text: o.trim(), say: o.trim() } : { text: o.text ?? o.say, say: spoken(f, o) })
+      : f.question ? [{ text: '这篇论文回答一个问题：' + txt(f.question), say: '这篇论文回答一个问题：' + spoken(f, f.question) }] : [];
+    let ui = 1.0;
+    intros.forEach(o => {
+      const c = clipOf(o.say); voice.push({ sc: sc[0], t: ui, say: o.say, clip: c }); if (!c) return;
+      // whatever is said in the intro and outro also gets captions (silent films stay as they are)
+      sc[0].lines.push(...chunks(o.text, ui, c.end + .3)); sc[0].dur = Math.max(3.6, ui + c.end + .8); ui += c.end + GAP;
+    });
     f.scenes.forEach((s, i) => {
       const lines = [], scene = { ...s, num: i + 1, lines }; let u = s.lead ?? 0.5;
       (s.lines || []).forEach(l => {
@@ -131,7 +143,7 @@ const PM = (() => {
     return { x: x0, y: y - size / 2, w: tw, h: size };
   }
 
-  // ---------- drawing helpers (all coordinates are absolute on the 1080×1440 stage) ----------
+  // ---------- drawing helpers (all coordinates are absolute on the W×H stage) ----------
   const D = {
     text(s, x, y, o = {}) { return rich(spans(s, o.color ?? COL.fg, o.hl ?? COL.acc), x, y, o); },
     rich,
@@ -334,18 +346,19 @@ const PM = (() => {
   };
 
   // ---------- chrome: header, captions, brand ----------
-  function brandMark(x, y, size, a = 1, align = 'right') {
-    X.font = FONT.cn(size, 700); const tw = X.measureText(BRAND).width, sq = size * .62;
+  function brandMark(x, y, size, a = 1, align = 'right', label = BRAND) {
+    X.font = FONT.cn(size, 700); const tw = X.measureText(label).width, sq = size * .62;
     const x0 = align === 'right' ? x - tw - sq - 12 : align === 'center' ? x - (tw + sq + 12) / 2 : x;
     D.rect(x0, y - sq / 2, sq, sq, { r: sq * .28, fill: COL.acc, alpha: a });
-    rich([[BRAND, COL.fg]], x0 + sq + 12, y + 1, { size, weight: 700, align: 'left', alpha: a, kind: 'brand' });
+    rich([[label, COL.fg]], x0 + sq + 12, y + 1, { size, weight: 700, align: 'left', alpha: a, kind: 'brand' });
   }
   function header(sc, a) {
     if (sc.builtin) return;
-    D.chip(String(sc.num).padStart(2, '0'), 56, 72, { size: 26, align: 'left', alpha: a, kind: 'chrome' });
-    D.text(sc.name, 128, 72, { size: 30, align: 'left', color: COL.sub, alpha: a, kind: 'chrome', maxW: 700 });
+    const [hx, hy, hw] = LY.head;   // chapter number + name on the left, 张指导出品 on the right of the same row
+    D.chip(String(sc.num).padStart(2, '0'), hx, hy, { size: 26, align: 'left', alpha: a, kind: 'chrome' });
+    D.text(sc.name, hx + 72, hy, { size: 30, align: 'left', color: COL.sub, alpha: a, kind: 'chrome', maxW: hw });
   }
-  // wrap caption spans into ≤2 lines of ≤940 px; ASCII words never split, closing punctuation never starts a line
+  // wrap caption spans into ≤2 lines of ≤ maxW px; ASCII words never split, closing punctuation never starts a line
   function wrapCaption(parts, size, maxW) {
     X.font = FONT.cn(size, 600);
     const units = [];
@@ -366,8 +379,8 @@ const PM = (() => {
   function caption(sc, lt) {
     const l = sc.lines.find(l => lt >= l.t0 && lt < l.t1); if (!l) return;
     const a = Math.min(clamp((lt - l.t0) / .15), clamp((l.t1 - lt) / .12));
-    let size = 42, lines = wrapCaption(spans(l.text, COL.fg, COL.acc), size, 940);
-    if (lines.length > 2) { if (LOG) LOG.warn('字幕太长', `超过两行：「${l.text.replace(/\*\*/g, '')}」`); size = 36; lines = wrapCaption(spans(l.text, COL.fg, COL.acc), size, 960); }
+    let size = 42, lines = wrapCaption(spans(l.text, COL.fg, COL.acc), size, LY.capW[0]);
+    if (lines.length > 2) { if (LOG) LOG.warn('字幕太长', `超过两行：「${l.text.replace(/\*\*/g, '')}」`); size = 36; lines = wrapCaption(spans(l.text, COL.fg, COL.acc), size, LY.capW[1]); }
     const lh = size * 1.45, y0 = ZONE.cap - (lines.length - 1) * lh / 2;
     lines.forEach((ln, i) => rich(ln, W / 2, y0 + i * lh, { size, alpha: a, kind: 'caption' }));
   }
@@ -382,12 +395,12 @@ const PM = (() => {
   // tool: false (local films) drops the tool name and keeps the slogan; the 张指导出品 credit always stays
   const tag = () => FILM.tool === false ? SLOGAN : `${TOOL} · ${SLOGAN}`;
   function intro(t) {
-    const p = FILM.paper || {}, a0 = prog(t, 0, .7);
-    brandMark(80, 140, 40, prog(t, .2, .6), 'left');
-    D.text(tag(), 80, 214, { size: 28, align: 'left', color: COL.dim, alpha: .5 + .5 * a0 });
+    const p = FILM.paper || {}, a0 = prog(t, 0, .7), dy = LY.dy;   // both layouts are 1080 wide; portrait moves everything down by dy
+    brandMark(80, 140 + dy, 40, prog(t, .2, .6), 'left');
+    D.text(tag(), 80, 214 + dy, { size: 28, align: 'left', color: COL.dim, alpha: .5 + .5 * a0 });
     const tl = wrapWords(p.title || '', 84, 920);
-    tl.forEach((s, i) => D.text(s, 80, 360 + i * 104 + (1 - a0) * 30, { size: 84, weight: 800, font: 'disp', align: 'left', alpha: .35 + .65 * a0 }));
-    const yb = 360 + tl.length * 104;
+    tl.forEach((s, i) => D.text(s, 80, 360 + dy + i * 104 + (1 - a0) * 30, { size: 84, weight: 800, font: 'disp', align: 'left', alpha: .35 + .65 * a0 }));
+    const yb = 360 + dy + tl.length * 104;
     D.line(80, yb - 10, 80 + 300 * prog(t, .3, 1.2, 'io'), yb - 10, { color: COL.acc, lw: 8 });
     D.text(p.byline || '', 80, yb + 50, { size: 32, align: 'left', color: COL.sub, alpha: prog(t, .4, .6) });
     const q = prog(t, 1.0, .7);
@@ -395,19 +408,19 @@ const PM = (() => {
     wrapCN(txt(FILM.question || ''), 56, 920, COL.acc, COL.fg).forEach((ln, i) => rich(ln, 80, yb + 285 + i * 80 + (1 - q) * 24, { size: 56, weight: 700, align: 'left', alpha: q }));
   }
   function outro(t, sc) {
-    const r = FILM.recap || [];
-    D.text('最后回顾', 80, 220, { size: 34, align: 'left', color: COL.dim, alpha: prog(t, 0, .5) });
+    const r = FILM.recap || [], dy = LY.dy * .75;
+    D.text('最后回顾', 80, 220 + dy, { size: 34, align: 'left', color: COL.dim, alpha: prog(t, 0, .5) });
     r.forEach((q, i) => {
-      const s = txt(q), a = prog(t, sc.recapT[i], .6), y = 330 + i * 170;
+      const s = txt(q), a = prog(t, sc.recapT[i], .6), y = 330 + dy + i * 170;
       D.circle(110, y, 30, { fill: COL.acc, alpha: a });
       D.text(String(i + 1), 110, y + 1, { size: 32, weight: 800, font: 'disp', color: '#111', alpha: a });
       const ls = wrapCN(s, 40, 840);
       ls.forEach((ln, j) => rich(ln, 170, y + j * 56 - (ls.length - 1) * 28, { size: 40, align: 'left', alpha: a }));
     });
     const b = prog(t, sc.dur - 3.0, .7);
-    D.line(80, 970, 80 + 920 * b, 970, { color: COL.faint, lw: 2 });
-    brandMark(W / 2, 1050, 56, b, 'center');
-    D.text(tag(), W / 2, 1125, { size: 30, color: COL.dim, alpha: b });
+    D.line(80, 970 + dy, 80 + 920 * b, 970 + dy, { color: COL.faint, lw: 2 });
+    brandMark(W / 2, 1050 + dy, 56, b, 'center');
+    D.text(tag(), W / 2, 1125 + dy, { size: 30, color: COL.dim, alpha: b });
   }
 
   // ---------- one frame ----------
@@ -429,7 +442,7 @@ const PM = (() => {
     X.restore();
     if (SNAP) SNAP(sc, lt);
     caption(sc, lt);
-    if (!sc.builtin) brandMark(W - 56, 72, 26, .9);
+    if (!sc.builtin) brandMark(W - LY.head[0], LY.head[1], 26, .9, 'right', FILM.tool === false ? BRAND : TOOL);   // the corner advertises the tool; local films keep the credit
   }
   function G(sc, t) {
     const L = i => { if (!sc.lines[i]) throw new Error(`L(${i}) 超出「${sc.id}」的字幕条数 ${sc.lines.length}`); return sc.lines[i].t0; };
@@ -471,8 +484,8 @@ const PM = (() => {
     LOG = { items: [], warn };
     // content-only thumbnails (captured before captions are drawn) to tell whether the picture moves
     // 1/10 scale; "moved" = at least 6 thumbnail pixels changed visibly, so a label fading in counts, codec-level noise does not
-    const small = document.createElement('canvas'); small.width = 108; small.height = 144; const sx = small.getContext('2d', { willReadFrequently: true });
-    let grab = null; SNAP = () => { sx.drawImage(C, 0, 0, 108, 144); grab = sx.getImageData(0, 0, 108, 144).data; };
+    const tw = W / 10, th = H / 10, small = document.createElement('canvas'); small.width = tw; small.height = th; const sx = small.getContext('2d', { willReadFrequently: true });
+    let grab = null; SNAP = () => { sx.drawImage(C, 0, 0, tw, th); grab = sx.getImageData(0, 0, tw, th).data; };
     const thumb = t => { render(t); return grab; };
     const diff = (p, d) => { let n = 0; for (let i = 0; i < d.length; i += 4) if (Math.abs(d[i] - p[i]) + Math.abs(d[i + 1] - p[i + 1]) + Math.abs(d[i + 2] - p[i + 2]) > 36) n++; return n >= 6 ? 1 : 0; };
     TL.scenes.filter(s => !s.builtin).forEach(sc => {
@@ -488,13 +501,14 @@ const PM = (() => {
     });
     SNAP = null;
     const ov = {};
+    const edge = FILM.layout === 'portrait' ? '超出安全区' : '超出画面', [sx0, sy0, sx1, sy1] = LY.safe;
     for (let t = 0; t < TL.total; t += .25) {
       cur.t = t; const sc = sceneAt(t); cur.sc = sc.id; LOG.items = []; const nowOv = new Set();
       render(t);
       const capOn = sc.lines.some(l => t - sc.t0 >= l.t0 && t - sc.t0 < l.t1);
       for (const it of LOG.items) {
-        if (it.kind === 'rect' || it.kind === 'caption') { if (it.kind === 'caption' && (it.x0 < 30 || it.x1 > W - 30)) warn('出界', '字幕超出画面'); continue; }
-        if (it.x0 < 20 || it.x1 > W - 20 || it.y0 < 16 || it.y1 > H - 16) warn('出界', `${it.kind}「${(it.s || '').slice(0, 16)}」超出画面`);
+        if (it.kind === 'rect' || it.kind === 'caption') { if (it.kind === 'caption' && (it.x0 < LY.capX[0] || it.x1 > LY.capX[1])) warn('出界', '字幕' + edge); continue; }
+        if (it.x0 < sx0 || it.x1 > sx1 || it.y0 < sy0 || it.y1 > sy1) warn('出界', `${it.kind}「${(it.s || '').slice(0, 16)}」${edge}`);
         if (it.size && it.size < (it.kind === 'note' ? 20 : 22)) warn('字太小', `「${(it.s || '').slice(0, 16)}」只有 ${it.size}px`);
         if (capOn && !sc.builtin && it.kind !== 'brand' && it.kind !== 'chrome' && it.y1 > ZONE.bottom + 20) warn('压字幕', `${it.kind}「${(it.s || '').slice(0, 12)}」伸进字幕区（y>${ZONE.bottom}）`);
       }
@@ -525,7 +539,7 @@ const PM = (() => {
       else if (sc.builtin === 'outro') shots.push([sc.t0 + sc.dur - .4, '回顾']);
       else sc.lines.forEach((l, i) => shots.push([sc.t0 + l.t1 - .25, `${String(sc.num).padStart(2, '0')}·${i + 1}`]));
     });
-    const cw = +(q.get('cell') || 270), ch = cw * 4 / 3, cols = +(q.get('cols') || 6), rows = Math.ceil(shots.length / cols);
+    const cw = +(q.get('cell') || 270), ch = cw * H / W, cols = +(q.get('cols') || 6), rows = Math.ceil(shots.length / cols);
     const sheet = document.createElement('canvas'); sheet.width = cols * cw; sheet.height = rows * (ch + 34); const S = sheet.getContext('2d');
     S.fillStyle = '#000'; S.fillRect(0, 0, sheet.width, sheet.height);
     shots.forEach(([t, lab], i) => {
@@ -603,7 +617,8 @@ const PM = (() => {
   }
 
   async function boot() {
-    C = document.getElementById('pm'); X = C.getContext('2d');
+    C = document.getElementById('pm'); C.width = W; C.height = H; X = C.getContext('2d');
+    document.documentElement.style.setProperty('--ar', W / H);   // player.html sizes the stage from this
     if (!FILM) throw new Error('film.js 里没有调用 PM.film({...})');
     await loadAssets(); TL = timeline(FILM);
     const q = new URLSearchParams(location.search);
@@ -619,5 +634,13 @@ const PM = (() => {
     player(track);
   }
 
-  return { render: t => render(t), timeline: () => TL, film: f => { FILM = f; const ft = f.tool === false && document.getElementById('foot'); if (ft && ft.firstChild) ft.firstChild.nodeValue = BRAND; }, boot, W, H, COL };
+  function film(f) {
+    if (f.layout != null && f.layout !== 'portrait') throw new Error(`layout 只能不写（3:4）或写 'portrait'（9:16），不认识「${f.layout}」`);
+    FILM = f; LY = LAYOUTS[f.layout || 'card']; ({ W, H, ZONE } = LY);
+    if (f.tool === false) {   // no tool name anywhere on the page: the corner and the footer show the credit instead
+      const ft = document.getElementById('foot'), tp = document.querySelector('#top b');
+      if (ft && ft.firstChild) ft.firstChild.nodeValue = BRAND; if (tp) tp.textContent = BRAND;
+    }
+  }
+  return { render: t => render(t), timeline: () => TL, film, boot, get W() { return W; }, get H() { return H; }, COL };
 })();

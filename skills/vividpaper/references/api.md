@@ -5,9 +5,11 @@ film.js 只做一件事：调用一次 `PM.film({...})`。
 ```js
 PM.film({
   paper: { title: 'Attention Is All You Need', byline: 'Vaswani 等 · Google · NIPS 2017', arxiv: '1706.03762' },
-  tool: false,                                                // 可选：不显示「VividPaper」字样（本地自用的片子），「张指导出品」照旧
+  tool: false,                                                // 可选：不显示「VividPaper」字样（本地自用的片子），右上角改回「张指导出品」
+  layout: 'portrait',                                         // 可选：9:16 竖屏视频版式（1080×1920），不写就是 3:4 网页版式；见下文「画布」
   question: '翻译模型能不能**完全不用 RNN**，只靠注意力？',   // 片头的主线问题，**…** 是强调色
-  intro: '今天我们来讲 Google 的 Transformer……',               // 可选：片头念的整段开场白（原样念），替换默认的「这篇论文回答一个问题：」+ question
+  intro: '今天我们来讲 Google 的 Transformer……',               // 可选：片头念的开场白（原样念），替换默认的「这篇论文回答一个问题：」+ question；
+                                                              //   分几段念就写成数组，每段是字符串或 { text, say }
   recap: ['…', '…', '…'],                                     // 片尾「最后回顾」，3–4 条，每条 ≤ 25 字
   pronounce: { 'RoFormer': 'Roformer', '−': '减' },            // 可选，配音时的统一念法替换（见下文「配音」）
   scenes: [
@@ -21,7 +23,7 @@ PM.film({
 });
 ```
 
-片头（3.6 秒）、片尾回顾、每幕的淡入淡出、左上角章节号、右上角「张指导出品」、底部字幕，引擎都会自动画，film.js 不用管。
+片头（3.6 秒）、片尾回顾、每幕的淡入淡出、左上角章节号、右上角「VividPaper」、底部字幕，引擎都会自动画，film.js 不用管。
 
 ## 时间
 
@@ -48,13 +50,15 @@ draw(g) 必须是 t 的纯函数：不用 `Date.now()`、`Math.random()`（要�
 ## 导出接口（给转视频之类的外部工具用）
 
 - 打开成片时带 `?capture`：只加载、画第 0 秒，不起播放器、不解码配音；`document.title` 变成 `READY` 就可以开始截。
-- `PM.render(t)`：把第 t 秒画到 `<canvas id="pm">`（1080×1440）。
+- `PM.render(t)`：把第 t 秒画到 `<canvas id="pm">`（`PM.W × PM.H`：3:4 是 1080×1440，`layout: 'portrait'` 是 1080×1920）。
 - `PM.timeline()`：时间轴。`scenes[i].t0 / dur`（秒）、`scenes[i].lines[j].text / t0 / t1`（字幕，相对本幕起点）；`voice[k].t`（这段配音在全片的起点）、`voice[k].say`、`voice[k].clip`（`src` 音频 data URL、`end` 念完的时刻）。
-- 版面约定：每一幕（含片头片尾）y ≤ 1190 是画面（章节标题、署名、内容），y > 1190 只放字幕。所以外部工具可以只取上面 1190 行，自己按别的尺寸重排字幕。
+- 版面约定：每一幕（含片头片尾）y ≤ `ZONE.bottom`（3:4 是 1190，竖版是 1310）是画面（章节标题、署名、内容），再往下只放字幕。所以外部工具可以只取上面这部分，自己按别的尺寸重排字幕。
 
 ## 画布
 
 1080 × 1440。内容放在 **y 130–1190**；y > 1190 是字幕区，字幕在播时不要放东西。左右各留 20 以上。
+
+`layout: 'portrait'`（做竖屏短视频用）：1080 × 1920，看得见的东西都在短视频平台的安全区 **x 80–1000、y 250–1480** 里，四周留给播放器的按钮和文案。章节标题和右上角署名在 y 300 一行，内容放在 **y 350–1310**，字幕在 1310 以下。自查按这个安全区查出界。竖版不是把 3:4 缩小，要按这个尺寸重新排 draw(g)：坐标写成 `g.W`、`g.ZONE.top` 这样的相对写法，两种版式都能用。
 
 颜色 `g.COL`：`bg panel fg sub dim faint line acc(赭橙，强调) acc2 blue green yellow purple red white`。
 
