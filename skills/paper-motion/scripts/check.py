@@ -8,7 +8,7 @@ Writes next to the html:
   _frames/<name>_t<sec>.png  full-size frames for --at (scratch, not part of the film)
   <name>_audit.json    timeline + warnings
 Prints the warnings. Exit code 1 when there are any, so you fix them before handing over.
-Kinds: 报错 / 出界 / 字太小 / 压字幕 / 文字重叠 / 字幕太长 / 这句画面不动 / 画面静止 / 总长.
+Kinds: 报错 / 出界 / 字太小 / 压字幕 / 文字重叠 / 字幕太长 / 这句画面不动 / 画面静止 / 总长 / 配音.
 """
 import argparse, base64, html, json, os, re, shutil, subprocess, sys
 from pathlib import Path
@@ -63,6 +63,9 @@ def main():
 
     tot = out["total"]
     print(f"总长 {int(tot // 60)}:{int(tot % 60):02d}（{tot:.0f} 秒）· {len(out['scenes']) - 2} 幕")
+    if out.get("voice"):
+        v = out["voice"]
+        print(f"配音 {v['clips']} 句（{v['voice']}）· 念完 {v['seconds']:.0f} 秒" + (f" · {v['missing']} 句没有配音" if v["missing"] else ""))
     for s in out["scenes"]:
         print(f"  {s['t0']:6.1f}s  {s['dur']:5.1f}s  {s['id']:<10} {s['name']}")
     print(f"关键帧总览：{stem}_sheet.png")

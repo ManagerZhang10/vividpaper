@@ -41,21 +41,49 @@ const PM = (() => {
     const cjk = (t.match(/[㐀-鿿]/g) || []).length, words = (t.match(/[A-Za-z0-9.√_]+/g) || []).length;
     return Math.max(2.4, 0.6 + 0.17 * cjk + 0.3 * words);
   }
+  // Voice-over (optional): build.py fills PM_VOICE.clips from voice/ — spoken text → { src, dur: clip length, end: where the speech ends }.
+  // With a clip, a line lasts as long as it takes to say (+ GAP), so every action hung on g.L(i) moves with the voice.
+  const GAP = 0.4;
+  const txt = q => typeof q === 'string' ? q : q.text;
+  // what gets read aloud: `say` verbatim, otherwise the caption without **, with the film's `pronounce` substitutions,
+  // then formula notation made sayable — TTS reads x_t as 「x 下划线 t」, N²−N as 「N 平方负 N」 and drops the 1 of x₁
+  function spoken(f, q) {
+    if (typeof q !== 'string' && q.say != null) return q.say.trim();
+    let s = txt(q).replace(/\*\*/g, '');
+    Object.entries(f.pronounce || {}).forEach(([a, b]) => { s = s.split(a).join(b); });
+    return s
+      .replace(/[₀-₉]/g, c => ' ' + (c.charCodeAt(0) - 0x2080))
+      .replace(/([A-Za-z0-9Ͱ-Ͽ)²³ā])\s*−\s*/g, '$1 减 ')   // − between two terms is minus; a leading −2 stays negative
+      .replace(/²/g, ' 平方').replace(/³/g, ' 立方')
+      .replace(/_/g, ' ').replace(/‖/g, '').replace(/\s*→\s*/g, '，')
+      .replace(/ {2,}/g, ' ').trim();
+  }
+  const clipOf = s => (window.PM_VOICE && window.PM_VOICE.clips[s]) || null;
   function timeline(f) {
-    const sc = [{ id: 'intro', name: '片头', builtin: 'intro', lines: [], dur: 3.6 }];
+    const voice = [];   // every piece of narration in order: { sc, t (scene-local start), say, clip }
+    const qSay = f.question ? '这篇论文回答一个问题：' + spoken(f, f.question) : '', qc = clipOf(qSay);
+    const sc = [{ id: 'intro', name: '片头', builtin: 'intro', lines: [], dur: qc ? Math.max(3.6, 1.0 + qc.end + 0.8) : 3.6 }];
+    if (qSay) voice.push({ sc: sc[0], t: 1.0, say: qSay, clip: qc });
     f.scenes.forEach((s, i) => {
-      const lines = []; let u = s.lead ?? 0.5;
+      const lines = [], scene = { ...s, num: i + 1, lines }; let u = s.lead ?? 0.5;
       (s.lines || []).forEach(l => {
-        const o = typeof l === 'string' ? { text: l } : l;
-        const d = o.dur ?? lineDur(o.text) + (o.hold || 0);
-        lines.push({ text: o.text, t0: u, t1: u + d }); u += d;
+        const o = typeof l === 'string' ? { text: l } : l, say = spoken(f, o), c = clipOf(say);
+        const d = c ? Math.max(o.dur ?? 0, c.end + GAP + (o.hold || 0)) : o.dur ?? lineDur(o.text) + (o.hold || 0);
+        lines.push({ text: o.text, t0: u, t1: u + d }); voice.push({ sc: scene, t: u, say, clip: c }); u += d;
       });
-      sc.push({ ...s, num: i + 1, lines, dur: u + (s.tail ?? 0.8) });
+      scene.dur = u + (s.tail ?? 0.8); sc.push(scene);
     });
-    const recap = f.recap || [];
-    sc.push({ id: 'outro', name: '回顾', builtin: 'outro', lines: [], dur: 1.2 + recap.length * 1.7 + 3.2 });
+    // recap items come up one by one: every 1.7 s, or once the previous one has been said
+    const recapT = []; let u = .6;
+    (f.recap || []).forEach(r => {
+      const say = spoken(f, r), c = clipOf(say);
+      recapT.push(u); voice.push({ sc: null, t: u, say, clip: c }); u += Math.max(1.7, c ? c.end + GAP : 0);
+    });
+    const outro = { id: 'outro', name: '回顾', builtin: 'outro', lines: [], recapT, dur: u + .6 + 3.2 }; sc.push(outro);
+    voice.forEach(v => { v.sc = v.sc || outro; });
     let t = 0; sc.forEach(s => { s.t0 = t; t += s.dur; });
-    return { scenes: sc, total: t };
+    voice.forEach(v => { v.t += v.sc.t0; });
+    return { scenes: sc, total: t, voice };
   }
   function sceneAt(t) { const s = TL.scenes; for (let i = s.length - 1; i >= 0; i--) if (t >= s[i].t0) return s[i]; return s[0]; }
 
@@ -333,9 +361,11 @@ const PM = (() => {
     return out.map(l => l.trim()).filter(Boolean);
   }
   function wrapCN(s, size, maxW, base = COL.fg, hl = COL.acc) { return wrapCaption(spans(s, base, hl), size, maxW); }
+  // tool: false (local films) drops the tool name and keeps the slogan; the 张指导出品 credit always stays
+  const tag = () => FILM.tool === false ? SLOGAN : `${TOOL} · ${SLOGAN}`;
   function intro(t) {
     const p = FILM.paper || {}, a0 = prog(t, 0, .7);
-    D.text(`${TOOL} · ${SLOGAN}`, 80, 214, { size: 28, align: 'left', color: COL.dim, alpha: .5 + .5 * a0 });
+    D.text(tag(), 80, 214, { size: 28, align: 'left', color: COL.dim, alpha: .5 + .5 * a0 });
     const tl = wrapWords(p.title || '', 84, 920);
     tl.forEach((s, i) => D.text(s, 80, 360 + i * 104 + (1 - a0) * 30, { size: 84, weight: 800, font: 'disp', align: 'left', alpha: .35 + .65 * a0 }));
     const yb = 360 + tl.length * 104;
@@ -343,14 +373,14 @@ const PM = (() => {
     D.text(p.byline || '', 80, yb + 50, { size: 32, align: 'left', color: COL.sub, alpha: prog(t, .4, .6) });
     const q = prog(t, 1.0, .7);
     D.text('这篇论文回答一个问题', 80, yb + 200, { size: 32, align: 'left', color: COL.dim, alpha: q });
-    wrapCN(FILM.question || '', 56, 920, COL.acc, COL.fg).forEach((ln, i) => rich(ln, 80, yb + 285 + i * 80 + (1 - q) * 24, { size: 56, weight: 700, align: 'left', alpha: q }));
+    wrapCN(txt(FILM.question || ''), 56, 920, COL.acc, COL.fg).forEach((ln, i) => rich(ln, 80, yb + 285 + i * 80 + (1 - q) * 24, { size: 56, weight: 700, align: 'left', alpha: q }));
     brandMark(80, 1300, 40, prog(t, .2, .6), 'left');
   }
   function outro(t, sc) {
     const r = FILM.recap || [];
-    D.text('一句话串起来', 80, 220, { size: 34, align: 'left', color: COL.dim, alpha: prog(t, 0, .5) });
-    r.forEach((s, i) => {
-      const a = prog(t, .6 + i * 1.7, .6), y = 330 + i * 170;
+    D.text('最后回顾', 80, 220, { size: 34, align: 'left', color: COL.dim, alpha: prog(t, 0, .5) });
+    r.forEach((q, i) => {
+      const s = txt(q), a = prog(t, sc.recapT[i], .6), y = 330 + i * 170;
       D.circle(110, y, 30, { fill: COL.acc, alpha: a });
       D.text(String(i + 1), 110, y + 1, { size: 32, weight: 800, font: 'disp', color: '#111', alpha: a });
       const ls = wrapCN(s, 40, 840);
@@ -359,7 +389,7 @@ const PM = (() => {
     const b = prog(t, sc.dur - 3.0, .7);
     D.line(80, 1180, 80 + 920 * b, 1180, { color: COL.faint, lw: 2 });
     brandMark(W / 2, 1270, 56, b, 'center');
-    D.text(`${TOOL} · ${SLOGAN}`, W / 2, 1350, { size: 30, color: COL.dim, alpha: b });
+    D.text(tag(), W / 2, 1350, { size: 30, color: COL.dim, alpha: b });
   }
 
   // ---------- one frame ----------
@@ -396,6 +426,23 @@ const PM = (() => {
     await Promise.all(Object.entries(A).map(([k, src]) => new Promise((res, rej) => {
       const im = new Image(); im.onload = () => { IMG[k] = im; res(); }; im.onerror = () => rej(new Error('图片加载失败 ' + k)); im.src = src;
     })));
+  }
+
+  // ---------- voice track ----------
+  // All clips mixed into one track at their places on the timeline, so a single <audio> can seek, run at 2× and be unlocked by one tap.
+  async function voiceTrack() {
+    const items = TL.voice.filter(v => v.clip); if (!items.length) return null;
+    const rate = 24000, ac = new OfflineAudioContext(1, 1, rate), out = new Float32Array(Math.ceil(TL.total * rate));
+    for (const v of items) {
+      const bytes = Uint8Array.from(atob(v.clip.src.split(',')[1]), c => c.charCodeAt(0));
+      const d = (await ac.decodeAudioData(bytes.buffer)).getChannelData(0), at = Math.round(v.t * rate);
+      for (let i = 0; i < d.length && at + i < out.length; i++) out[at + i] += d[i];
+    }
+    const b = new DataView(new ArrayBuffer(44 + out.length * 2)), str = (o, s) => [...s].forEach((c, i) => b.setUint8(o + i, c.charCodeAt(0)));
+    str(0, 'RIFF'); b.setUint32(4, 36 + out.length * 2, true); str(8, 'WAVEfmt '); b.setUint32(16, 16, true); b.setUint16(20, 1, true); b.setUint16(22, 1, true);
+    b.setUint32(24, rate, true); b.setUint32(28, rate * 2, true); b.setUint16(32, 2, true); b.setUint16(34, 16, true); str(36, 'data'); b.setUint32(40, out.length * 2, true);
+    out.forEach((v, i) => b.setInt16(44 + i * 2, clamp(v, -1, 1) * 32767, true));
+    return { url: URL.createObjectURL(new Blob([b], { type: 'audio/wav' })), clips: items.length, seconds: +(out.length / rate).toFixed(2) };
   }
 
   // ---------- self-check (?audit): sample the film, report problems, render a contact sheet ----------
@@ -445,6 +492,11 @@ const PM = (() => {
       for (const k in ov) if (!nowOv.has(k)) delete ov[k];
     }
     SNAP = null; LOG = null;
+    if (window.PM_VOICE) TL.voice.forEach(v => {
+      cur.t = v.t; cur.sc = v.sc.id;
+      if (!v.clip) warn('配音', `「${v.say.slice(0, 16)}…」没有配音：改过字幕就重跑 voice.py`);
+      else if (v.clip.end < .3 * lineDur(v.say)) warn('配音', `「${v.say.slice(0, 16)}…」的配音只有 ${v.clip.end.toFixed(1)} 秒，像是被截断了：重跑 voice.py`);
+    });
     cur.t = 0; cur.sc = 'film';
     if (TL.total < 140) warn('总长', `只有 ${TL.total.toFixed(0)} 秒，目标 150–210 秒：加一幕或每幕加一两句`);
     if (TL.total > 240) warn('总长', `有 ${TL.total.toFixed(0)} 秒，超过 4 分钟：砍幕，不要压缩字幕`);
@@ -464,14 +516,32 @@ const PM = (() => {
     });
     const frames = {};
     (q.get('at') || '').split(',').filter(Boolean).forEach(s => { render(+s); frames[s] = C.toDataURL('image/png'); });
-    const out = { total: +TL.total.toFixed(2), scenes: TL.scenes.map(s => ({ id: s.id, name: s.name, t0: +s.t0.toFixed(2), dur: +s.dur.toFixed(2), lines: s.lines.length })), warnings: warns, sheet: sheet.toDataURL('image/png'), frames };
+    const vc = TL.voice.filter(v => v.clip);
+    const voice = window.PM_VOICE ? { clips: vc.length, missing: TL.voice.length - vc.length, seconds: +vc.reduce((a, v) => a + v.clip.end, 0).toFixed(1), voice: window.PM_VOICE.voice } : null;
+    const out = { total: +TL.total.toFixed(2), scenes: TL.scenes.map(s => ({ id: s.id, name: s.name, t0: +s.t0.toFixed(2), dur: +s.dur.toFixed(2), lines: s.lines.length })), voice, warnings: warns, sheet: sheet.toDataURL('image/png'), frames };
     const pre = document.createElement('pre'); pre.id = 'pm-audit'; pre.textContent = JSON.stringify(out); document.body.appendChild(pre);
   }
 
   // ---------- player ----------
-  function player() {
+  function player(track) {
     const $ = id => document.getElementById(id), fmt = s => `${Math.floor(s / 60)}:${String(Math.floor(s % 60)).padStart(2, '0')}`;
     let t = 0, playing = false, last = 0, speed = 1;
+    // sound: while the voice track plays it is the clock and the picture follows it; at 4× or muted, frames advance on their own
+    const A = track ? new Audio(track.url) : null; let sound = !!A, blocked = false;
+    const audible = () => A && sound && speed <= 2 && !blocked;
+    function syncAudio() {
+      if (!A) return;
+      if (playing && audible()) {
+        A.playbackRate = speed;
+        if (Math.abs(A.currentTime - t) > .25) A.currentTime = t;
+        if (A.paused) A.play().catch(() => { blocked = true; });
+      } else if (!A.paused) A.pause();
+    }
+    if (A) {
+      $('pm-snd').style.display = '';
+      $('pm-snd').onclick = () => { sound = !sound; $('pm-snd').textContent = sound ? '🔊' : '🔇'; syncAudio(); };
+      $('pm-keys').textContent += ' · M 开关声音';
+    }
     const chapters = TL.scenes.filter(s => !s.builtin);
     $('pm-title').textContent = (FILM.paper && FILM.paper.title) || '';
     const ticks = $('pm-ticks');
@@ -481,18 +551,26 @@ const PM = (() => {
       $('pm-chaps').appendChild(b);
       const k = document.createElement('i'); k.style.left = (sc.t0 / TL.total * 100) + '%'; ticks.appendChild(k);
     });
-    const seek = s => { t = clamp(s, 0, TL.total); draw(); };
+    const seek = s => { t = clamp(s, 0, TL.total); if (A) A.currentTime = t; draw(); };
     function draw() {
       render(t);
       $('pm-time').textContent = `${fmt(t)} / ${fmt(TL.total)}`;
       $('pm-fill').style.width = (t / TL.total * 100) + '%';
       const cur = sceneAt(t).id; document.querySelectorAll('.chap').forEach(b => b.classList.toggle('on', b.dataset.id === cur));
     }
-    function loop(ts) { if (playing) { if (last) t += (ts - last) / 1000 * speed; last = ts; if (t >= TL.total) { t = TL.total; setPlay(false); } draw(); } requestAnimationFrame(loop); }
-    function setPlay(v) { playing = v; last = 0; if (v && t >= TL.total - .05) t = 0; $('pm-play').textContent = v ? '❚❚' : '▶'; $('pm-big').style.display = v ? 'none' : ''; }
+    function loop(ts) {
+      if (playing) {
+        if (audible() && !A.paused && A.currentTime > 0) t = A.currentTime;
+        else if (last) t += (ts - last) / 1000 * speed;
+        last = ts; if (t >= TL.total) { t = TL.total; setPlay(false); }
+        syncAudio(); draw();
+      }
+      requestAnimationFrame(loop);
+    }
+    function setPlay(v) { playing = v; last = 0; blocked = false; if (v && t >= TL.total - .05) t = 0; $('pm-play').textContent = v ? '❚❚' : '▶'; $('pm-big').style.display = v ? 'none' : ''; syncAudio(); }
     const toggle = () => setPlay(!playing);
     $('pm-play').onclick = toggle; $('pm-big').onclick = toggle; C.onclick = toggle;
-    document.querySelectorAll('.spd').forEach(b => b.onclick = () => { speed = +b.dataset.s; document.querySelectorAll('.spd').forEach(x => x.classList.toggle('on', x === b)); });
+    document.querySelectorAll('.spd').forEach(b => b.onclick = () => { speed = +b.dataset.s; document.querySelectorAll('.spd').forEach(x => x.classList.toggle('on', x === b)); syncAudio(); });
     const bar = $('pm-bar'), scrub = e => { const r = bar.getBoundingClientRect(); seek((e.clientX - r.left) / r.width * TL.total); };
     bar.onpointerdown = e => { bar.setPointerCapture(e.pointerId); scrub(e); bar.onpointermove = scrub; };
     bar.onpointerup = () => { bar.onpointermove = null; };
@@ -500,6 +578,7 @@ const PM = (() => {
       if (e.code === 'Space') { e.preventDefault(); toggle(); }
       else if (e.code === 'ArrowLeft') seek(t - 5); else if (e.code === 'ArrowRight') seek(t + 5);
       else if (['1', '2', '4'].includes(e.key)) document.querySelector(`.spd[data-s="${e.key}"]`).click();
+      else if (A && e.key.toLowerCase() === 'm') $('pm-snd').click();
     });
     const q = new URLSearchParams(location.search); if (q.has('t')) t = +q.get('t');
     draw(); requestAnimationFrame(loop);
@@ -510,10 +589,16 @@ const PM = (() => {
     if (!FILM) throw new Error('film.js 里没有调用 PM.film({...})');
     await loadAssets(); TL = timeline(FILM);
     const q = new URLSearchParams(location.search);
+    if (q.has('script')) {   // voice.py: everything that will be read aloud, in order
+      const pre = document.createElement('pre'); pre.id = 'pm-script';
+      pre.textContent = JSON.stringify(TL.voice.map(v => ({ scene: v.sc.id, say: v.say }))); document.body.appendChild(pre); return;
+    }
     if (q.has('audit')) { document.body.className = 'still'; return runAudit(q); }
     if (q.has('still')) { document.body.className = 'still'; render(+q.get('t') || 0); document.title = 'READY'; return; }
-    player();
+    let track = null;
+    try { track = await voiceTrack(); } catch (e) { console.error('配音音轨合成失败，改为无声播放', e); }
+    player(track);
   }
 
-  return { film: f => { FILM = f; }, boot, W, H, COL };
+  return { film: f => { FILM = f; const ft = f.tool === false && document.getElementById('foot'); if (ft && ft.firstChild) ft.firstChild.nodeValue = BRAND; }, boot, W, H, COL };
 })();

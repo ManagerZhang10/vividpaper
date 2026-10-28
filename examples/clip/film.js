@@ -320,7 +320,7 @@ PM.film({
     {
       id: 'zeroshot', name: '用起来：把类别名写成一句话',
       lines: [
-        '训练完，分类时不用再训练：把每个类别名填进模板 a photo of a {label}.',
+        { text: '训练完，分类时不用再训练：把每个类别名填进模板 a photo of a {label}.', say: '训练完，分类时不用再训练：把每个类别名填进模板，a photo of a 类别名' },
         '文本编码器把这几句话变成 embedding，相当于现场造出了一个分类器',
         '猫图的 embedding 和每句话比相似度，最像的那句就是答案',
         '光换成这个 prompt 模板，ImageNet 就涨了 **1.3%**；再集成 **80 个**模板，又涨 **3.5%**',
@@ -371,7 +371,7 @@ PM.film({
       lines: [
         'ImageNet zero-shot：之前从文字学的方法只有 **11.5%**，CLIP 做到 **76.2%**',
         '这追平了原版 ResNet-50，而它是用 128 万张标注图专门训练出来的',
-        '另外两个数据集也大幅领先：aYahoo 72.4% → **98.4%**，SUN 23.0% → **58.5%**',
+        { text: '另外两个数据集也大幅领先：aYahoo 72.4% → **98.4%**，SUN 23.0% → **58.5%**', say: '另外两个数据集也大幅领先：aYahoo 从 72.4% 提到 98.4%，SUN 从 23.0% 提到 58.5%' },
       ],
       draw(g) {
         const { t, L, COL } = g;
@@ -379,14 +379,16 @@ PM.film({
         const grp = (title, a, b, y, k, alpha) => g.bars(60, y, 960, [
           { label: 'Visual N-Grams', value: a, text: a.toFixed(1) }, { label: 'CLIP', value: b, text: b.toFixed(1), hi: true },
         ], { title, min: 0, max: 100, k, labelW: 250, h: 56, gap: 14, alpha });
+        const sayAt = (i, f) => g.lerp(L(i), g.Le(i), f);   // 第 i 句念到 f（0–1）的时刻
         const A = grp('ImageNet', 11.5, 76.2, 320, g.p(L(0) + .3, 1.6), g.p(.2, .4));
+        g.mark(A[1].x - 8, A[1].y - 8, A[1].w + 130, A[1].h + 16, { k: g.p(sayAt(0, .6), .6), lw: 4, alpha: 1 - g.p(L(1), .4) });
         // ResNet-50 marker at the same accuracy
         const m = g.p(L(1) + .3, .6), xm = A[1].x + A[1].w;
         g.line(xm, 290, xm, 290 + 160 * m, { color: COL.yellow, lw: 4, dash: [8, 8] });
         g.chip('≈ 原版 ResNet-50', xm, 490, { size: 30, color: COL.yellow, align: 'right', alpha: g.p(L(1) + .8, .4) });
         g.text('它用 **128 万张**标注图训练，CLIP 一张都没用', 540, 560, { size: 30, alpha: g.p(L(1) + 2, .4) });
         grp('aYahoo', 72.4, 98.4, 720, g.p(L(2) + .3, 1.4), g.p(L(2), .4));
-        grp('SUN', 23.0, 58.5, 930, g.p(L(2) + 1.4, 1.4), g.p(L(2) + 1.1, .4));
+        grp('SUN', 23.0, 58.5, 930, g.p(sayAt(2, .55), 1.4), g.p(sayAt(2, .5), .4));
         g.note('数据：论文 Table 1', 1020, 1110, { alpha: g.p(1, .4) });
       },
     },

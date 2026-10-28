@@ -192,7 +192,7 @@ PM.film({
           g.text('H(x) 想要的', 880, 925, { size: 30, color: COL.green, alpha: ha });
           // the part of H that x already gives — dashed outline
           XV.forEach((v, i) => { const [x, w] = H.bar(i); g.rect(x - 3, B - v * 220, w + 6, v * 220, { r: 5, stroke: COL.blue, lw: 3, dash: [6, 5], alpha: g.p(L(1) + 1.4, .4) }); });
-          const fk = g.p(L(1) + 2.6, .8);
+          const fk = g.p(g.lerp(L(1), g.Le(1), .42), .8);   // 念到「只学差值 F(x)」时长出来
           barVec(g, 540, Z, fv, COL.acc, { k: fk, alpha: fk > 0 ? 1 : 0 });
           g.text('F(x) 残差', 540, 925, { size: 30, color: COL.acc, alpha: fk });
         }
@@ -289,6 +289,9 @@ PM.film({
             { label: 'plain-34', value: 28.54, color: COL.faint }, { label: 'ResNet-34', value: 25.03, hi: true },
           ];
           const R = g.bars(60, 740, 960, items, { title: 'ImageNet top-1 错误率 % ↓ 越低越好', min: 24, max: 29, k: g.p(L(2) + .2, 1.4), labelW: 260, alpha: a });
+          // 念到「plain-34 是 28.54%」「ResNet-34 降到 25.03%」时依次圈出
+          g.mark(40, R[2].y - 6, 1000, R[2].h + 12, { k: g.p(g.lerp(L(2), g.Le(2), .3), .5), color: COL.sub, lw: 4, fill: .12, alpha: g.win(L(2), L(3), .3, .3) });
+          g.mark(40, R[3].y - 6, 1000, R[3].h + 12, { k: g.p(g.lerp(L(2), g.Le(2), .62), .5), lw: 4, fill: .12, alpha: g.win(L(2), L(3), .3, .3) });
           g.note('横轴从 24 起 · 数据：论文 Table 2', 1020, 1022, { alpha: a });
           if (t > L(3) - .1) {
             g.mark(40, R[0].y - 8, 1000, R[1].y + R[1].h - R[0].y + 16, { k: g.p(L(3) + .3, .6), color: COL.sub, lw: 3 });
@@ -365,8 +368,9 @@ PM.film({
         if (t > L(1) - .1) {
           const a = g.p(L(1), .4);
           const coco = [{ label: 'VGG-16', value: 21.2, color: COL.faint }, { label: 'ResNet-101', value: 27.2, hi: true }];
-          g.bars(60, 790, 960, coco, { title: 'COCO 检测 mAP@[.5, .95] % ↑ 越高越好', min: 0, max: 30, k: g.p(L(1) + .3, 1.4), labelW: 350, alpha: a });
-          g.chip('+6.0，相对提升 28%', 540, 948, { size: 30, color: COL.acc, alpha: g.p(L(1) + 2.4, .4) });
+          const C = g.bars(60, 790, 960, coco, { title: 'COCO 检测 mAP@[.5, .95] % ↑ 越高越好', min: 0, max: 30, k: g.p(L(1) + .3, 1.4), labelW: 350, alpha: a });
+          g.mark(50, C[1].y - 6, 980, C[1].h + 12, { k: g.p(g.lerp(L(1), g.Le(1), .55), .6), lw: 4, alpha: a });
+          g.chip('+6.0，相对提升 28%', 540, 948, { size: 30, color: COL.acc, alpha: g.p(g.lerp(L(1), g.Le(1), .78), .4) });
           g.note('数据：论文 Table 8（Faster R-CNN）', 1020, 992, { alpha: a });
         }
         if (t > L(2) - .1) {

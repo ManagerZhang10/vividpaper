@@ -61,6 +61,7 @@ const fmt2 = v => v.toFixed(2);
 PM.film({
   paper: { title: 'Denoising Diffusion Probabilistic Models', byline: 'Ho, Jain, Abbeel · UC Berkeley · NeurIPS 2020', arxiv: '2006.11239' },
   question: '怎么从**纯噪声**一步步「洗」出一张图？',
+  pronounce: { 'ā': 'alpha bar ' },                           // 配音念法：ā 就是论文的 ᾱ
   recap: [
     '前向：每步加一点噪声，1000 步后只剩**纯噪声**',
     '捷径：任意第 t 步都能**一步**加噪得到',
@@ -118,7 +119,7 @@ PM.film({
       id: 'jump', name: '捷径：任意一步可以直接算出来',
       lines: [
         { text: '不用真的加 1000 次：高斯噪声叠高斯噪声还是高斯，可以**一步**跳到任意第 t 步', hold: .6 },
-        '公式：x_t = √ā_t · x_0 + √(1−ā_t) · ε，ε 是一份标准高斯噪声',
+        { text: '公式：x_t = √ā_t · x_0 + √(1−ā_t) · ε，ε 是一份标准高斯噪声', say: '公式：x t 等于根号 alpha bar t 乘 x 0，加上根号下 1 减 alpha bar t 再乘 ε，ε 是一份标准高斯噪声' },
         { text: 'ā_t 是前 t 步「保留比例」的连乘：t 越大，原图那份越小，噪声那份越大', hold: 1 },
         '所以训练时随手抽一个 t，**一步**就能造出一个加噪样本',
       ],
@@ -142,7 +143,7 @@ PM.film({
         // the coefficients, live
         const ca = g.p(L(1) + .5, .4);
         g.chip(`× √ā_t = **${fmt2(sa(step))}**`, A.cx, 520, { size: 28, alpha: ca });
-        g.chip(`× √(1−ā_t) = **${fmt2(sb(step))}**`, B.cx + 10, 520, { size: 28, color: COL.blue, alpha: g.p(L(1) + 1.1, .4) });
+        g.chip(`× √(1−ā_t) = **${fmt2(sb(step))}**`, B.cx + 10, 520, { size: 28, color: COL.blue, alpha: g.p(g.lerp(L(1), g.Le(1), .5), .4) });   // 念到「加上根号下 1 减…」时出
         const fa = g.p(L(1), .5);
         g.rect(60, 572, 960, 92, { r: 16, fill: COL.panel, stroke: COL.faint, lw: 2, alpha: fa });
         g.rich([['x_t', COL.acc], [' = ', COL.fg], ['√ā_t', COL.acc], [' · x_0 + ', COL.fg], ['√(1−ā_t)', COL.blue], [' · ε', COL.blue]], 540, 618, { size: 44, font: 'disp', alpha: fa });
@@ -345,11 +346,14 @@ PM.film({
         g.mark(B[7].x - 306, B[7].y - 6, 950, B[7].h + 12, { k: g.p(L(2) + .7, .6), color: COL.purple, alpha: g.win(L(2), L(3), .3, .3) });
         if (t > L(3) - .1) {
           const a = g.p(L(3), .4);
-          g.bars(60, 950, 960, [
+          const sayAt = (i, f) => g.lerp(L(i), g.Le(i), f);   // 第 i 句念到 f（0–1）的时刻
+          const R = g.bars(60, 950, 960, [
             { label: '卧室 · ProgressiveGAN', value: 8.34, color: COL.faint }, { label: '卧室 · DDPM', value: 4.9, hi: true },
             { label: '教堂 · ProgressiveGAN', value: 6.42, color: COL.faint }, { label: '教堂 · DDPM', value: 7.89, hi: true },
           ], { title: 'LSUN 256×256 · FID ↓', min: 0, max: 10, k: g.p(L(3) + .3, 1.4), labelW: 330, h: 34, gap: 10, labelSize: 24, alpha: a });
           g.note('数据：论文 Table 3（卧室为 large 模型）', 1020, 1166, { alpha: a, size: 20 });
+          g.mark(R[1].x - 336, R[1].y - 5, 990, R[1].h + 10, { k: g.p(sayAt(3, .3), .5), lw: 3 });
+          g.mark(R[3].x - 336, R[3].y - 5, 990, R[3].h + 10, { k: g.p(sayAt(3, .55), .5), lw: 3 });
         }
       },
     },

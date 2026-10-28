@@ -42,7 +42,7 @@ PM.film({
   question: '图像能不能像句子一样，**直接交给 Transformer**？',
   recap: [
     '把图切成 16×16 的 **patch**，一块当一个词',
-    '拉平 → 乘 E → 加位置编码，前面插 **[class]**',
+    { text: '拉平 → 乘 E → 加位置编码，前面插 **[class]**', say: '拉平，乘 E，加位置编码，前面插一个 class token' },
     '后面是原样的 Transformer，用 [class] 的输出分类',
     '数据少不如 CNN，数据到 3 亿张就**反超**，还更省算力',
   ],
@@ -378,12 +378,15 @@ PM.film({
         // line 4: ViT-L/16 from Table 5
         if (t > L(3)) {
           const a = g.p(L(3) + .2, .4);
-          g.bars(60, 920, 960, [
+          const sayAt = f => g.lerp(L(3), g.Le(3), f);   // 这一句念到 f（0–1）的时刻
+          const R = g.bars(60, 920, 960, [
             { label: 'ImageNet', value: 76.53, color: COL.faint },
             { label: 'ImageNet-21k', value: 85.15, color: COL.acc2 },
             { label: 'JFT-300M', value: 87.12, hi: true },
           ], { title: 'ViT-L/16 · ImageNet 准确率 % ↑ 越高越好', min: 70, max: 90, k: g.p(L(3) + .4, 1.6), labelW: 230, alpha: a, h: 44, gap: 14 });
           g.note('横轴从 70 起 · 数据：论文 Table 5', 1020, 1124, { alpha: a });
+          g.mark(40, R[0].y - 6, 1000, R[0].h + 12, { k: g.p(sayAt(.35), .5), color: COL.sub, lw: 3, alpha: a * g.win(sayAt(.35), sayAt(.7), .3, .3) });
+          g.mark(40, R[2].y - 6, 1000, R[2].h + 12, { k: g.p(sayAt(.7), .5), lw: 4, alpha: a });
         }
       },
     },
