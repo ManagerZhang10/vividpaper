@@ -34,6 +34,7 @@ description: VividPaper——把一篇论文做成约 3 分钟的动效解读页
    - `figures/` 里的每张图都会打进 HTML，没用到的删掉；文件名以 `_` 开头的不打包。
 4. **写 `<短名>/film.js`**：照 `references/api.md` 的接口和 `references/craft.md` 的画法规则写。
    完整范例：`references/example-attention.js`（Attention Is All You Need），先通读一遍再动笔。
+   - 片尾回顾 3–4 条，**新片默认每条配一个小动效**：条目写成 `{ text, draw(g, box, u) }`，画那一幕机制的简化版，文字压到一行（≤ 12 字）。接口见 api.md「回顾小动效」，画法见 craft.md 第 7 条。
 5. **打包 + 自查**：
    ```bash
    python3 $PM/scripts/build.py <短名> -o <短名>/<短名>.html
