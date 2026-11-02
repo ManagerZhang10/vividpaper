@@ -73,19 +73,31 @@ const PM = (() => {
       .replace(/ {2,}/g, ' ').trim();
   }
   const clipOf = s => (window.PM_VOICE && window.PM_VOICE.clips[s]) || null;
+  // the opening template says three things, in this order: the question → 「今天解读<source>的论文 <title>」→ why it is worth reading
+  function openingLines(f) {
+    const op = f.opening, out = [], one = q => ({ text: txt(q), say: spoken(f, q) });
+    if (f.question) out.push(one(f.question));
+    if (op.source) {
+      const src = String(op.source).trim(), sp = c => /[A-Za-z0-9)]/.test(c) ? ' ' : '';
+      out.push(one(`今天解读${sp(src[0])}${src}${sp(src[src.length - 1])}的论文 **${(f.paper || {}).title || ''}**`));
+    }
+    if (op.why) out.push(one(op.why));
+    return out;
+  }
   function timeline(f) {
     const voice = [];   // every piece of narration in order: { sc, t (scene-local start), say, clip }
     // intro: the spoken opening — a string said verbatim, or several pieces (string or { text, say }) said one after another;
     // without it, the default lead-in + question
     const sc = [{ id: 'intro', name: '片头', builtin: 'intro', lines: [], segs: [], dur: 3.6 }];
     const intros = f.intro ? [].concat(f.intro).map(o => typeof o === 'string' ? { text: o.trim(), say: o.trim() } : { text: o.text ?? o.say, say: spoken(f, o) })
+      : f.opening ? openingLines(f)
       : f.question ? [{ text: '这篇论文回答一个问题：' + txt(f.question), say: '这篇论文回答一个问题：' + spoken(f, f.question) }] : [];
     let ui = 1.0;
     intros.forEach(o => {
       const c = clipOf(o.say); voice.push({ sc: sc[0], t: ui, say: o.say, clip: c });
       // whatever is said in the intro and outro also gets captions; silent films keep the plain title card,
       // unless introDraw needs the pieces timed (then they run as long as reading them takes)
-      const d = c ? c.end + GAP : f.introDraw ? lineDur(o.text) : null; if (d == null) return;
+      const d = c ? c.end + GAP : (f.introDraw || f.opening) ? lineDur(o.text) : null; if (d == null) return;
       sc[0].lines.push(...chunks(o.text, ui, d - .1)); sc[0].segs.push({ t0: ui, t1: ui + d });
       sc[0].dur = Math.max(3.6, ui + d + .4); ui += d;
     });
@@ -417,6 +429,7 @@ const PM = (() => {
   // top-right corner of every frame advertises the tool; local films keep the credit
   const corner = () => brandMark(W - LY.head[0], LY.head[1], 26, .9, 'right', FILM.tool === false ? BRAND : TOOL);
   function intro(t, sc) {
+    if (FILM.opening) return openingPic(t, sc);
     if (FILM.introDraw) return introPic(t, sc);
     const p = FILM.paper || {}, a0 = prog(t, 0, .7), dy = LY.dy;   // both layouts are 1080 wide; portrait moves everything down by dy
     brandMark(80, 140 + dy, 40, prog(t, .2, .6), 'left');
@@ -441,6 +454,43 @@ const PM = (() => {
     D.text(p.byline || '', 80, yb + lerp(36, 10, k), { size: lerp(30, 22, k), align: 'left', color: COL.sub });
     corner();
     FILM.introDraw(G(sc, t));
+  }
+  // the opening template (film.js opening: {...}). Frame 0 is the cover: title, byline, the question as a headline and
+  // opening.hero(g, box) underneath. Within the first second the title shrinks into a header and everything moves up;
+  // the source badges come up while 「今天解读…」 is said, the reasons to read it while the third piece is said.
+  function openingPic(t, sc) {
+    const op = FILM.opening, p = FILM.paper || {}, k = prog(t, .45, .8, 'io'), dy = LY.dy, g = G(sc, t);
+    const tl = wrapWords(p.title || '', 64, 920), sz = lerp(64, 30, k), lh = sz * 1.22, y0 = lerp(270 + dy, 170 + dy, k);
+    tl.forEach((s, i) => D.text(s, 80, y0 + i * lh, { size: sz, weight: 800, font: 'disp', align: 'left', color: k > .5 ? COL.sub : COL.fg }));
+    const yb = y0 + tl.length * lh, by = yb + lerp(36, 10, k);
+    D.line(80, yb - 6, 80 + 240 * prog(t, .1, .4), yb - 6, { color: COL.acc, lw: 6, alpha: 1 - k });
+    D.text(p.byline || '', 80, by, { size: lerp(30, 22, k), align: 'left', color: COL.sub });
+    // the question, word for word what is said first
+    const QS = 50, QLH = 68, ql = FILM.question ? wrapCN(txt(FILM.question), QS, 880, COL.fg, COL.acc) : [];   // measured at 600, drawn at 700: leave room
+    const qy = by + lerp(96, 84, k);
+    ql.forEach((ln, i) => rich(ln, 80, qy + i * QLH, { size: QS, weight: 700, align: 'left' }));
+    // the rows at the bottom, and the box the hero gets: from under the question down to above the badges (as laid out once the title has shrunk)
+    const yBadge = ZONE.bottom - 240, yPoint = ZONE.bottom - 135;
+    const qEnd = n => (n ? (n - 1) * QLH + QS / 2 : -60) + 52;
+    const top = qy + qEnd(ql.length), top1 = 170 + dy + tl.length * 30 * 1.22 + 10 + 84 + qEnd(ql.length);
+    const box = { x: 84, y: top, w: 912, h: Math.max(120, yBadge - 70 - top1) };   // inset so a stroke round the hero stays inside the safe area
+    corner();
+    if (op.hero) op.hero(g, box);
+    // which spoken piece is which: question, source, why (in that order, whichever of them exist)
+    let n = 0; const iQ = FILM.question ? n++ : -1, iS = op.source ? n++ : -1, iW = op.why ? n++ : -1;
+    const at = i => sc.segs[i] ? sc.segs[i].t0 : null, end = i => sc.segs[i] ? sc.segs[i].t1 : null;
+    const row = (items, y, size, style) => {   // a centred row of chips, shrunk to fit 920 px
+      if (!items.length) return;
+      const ws = s => { X.font = FONT.cn(size, 600); return spans(s).reduce((a, q) => a + X.measureText(q[0]).width, 0) + size * 1.1; };
+      let w = items.reduce((a, s) => a + ws(s), 0) + 24 * (items.length - 1);
+      if (w > 920) { size = Math.max(22, Math.floor(size * 920 / w)); w = items.reduce((a, s) => a + ws(s), 0) + 24 * (items.length - 1); }
+      let x = W / 2 - w / 2;
+      items.forEach((s, j) => { const st = style(j); if (st.alpha > 0) D.chip(s, x, y, { size, align: 'left', ...st }); x += ws(s) + 24; });
+    };
+    const badges = op.badges || (op.source ? [op.source] : []), tS = at(iS);
+    if (tS != null) row(badges, yBadge, 34, j => ({ color: j === badges.length - 1 ? COL.acc : COL.blue, solid: j === badges.length - 1, alpha: prog(t, tS + .5 + j * .8, .4) }));
+    const pts = op.points || [], tW = at(iW), tW1 = end(iW), PC = [COL.blue, COL.green, COL.acc2, COL.purple, COL.yellow];
+    if (tW != null) row(pts, yPoint, 28, j => ({ color: PC[j % PC.length], alpha: prog(t, lerp(tW, tW1, .02 + .9 * j / Math.max(1, pts.length)), .4) }));
   }
   function outro(t, sc) {
     const r = FILM.recap || [], dy = LY.dy * .75;
