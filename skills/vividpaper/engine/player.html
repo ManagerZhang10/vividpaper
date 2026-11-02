@@ -3,7 +3,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>__TITLE__</title>
-<meta name="generator" content="VividPaper · 张指导出品">
+<meta name="generator" content="VividPaper · https://github.com/ManagerZhang10/vividpaper">
 <style>
 :root{--bg:#070709;--fg:#F4F3EF;--dim:#8A8A92;--line:#26262C;--acc:#FF6A2C;--ar:.75;   /* width/height; pm.js sets 9/16 for layout: 'portrait' */
   --w:min(calc((100vh - 150px)*var(--ar)),calc(100vw - 32px));--h:calc(var(--w)/var(--ar))}
@@ -30,7 +30,7 @@ button.on{border-color:var(--acc);color:var(--acc)}
 #pm-time{font:600 13px ui-monospace,Menlo,monospace;color:var(--dim);white-space:nowrap}
 #pm-chaps{display:flex;flex-wrap:wrap;gap:6px}
 .chap{font-size:13px;color:#BDBDC4;text-align:left}.chap span{color:var(--acc);font-weight:700;margin-right:6px}
-#foot{color:#55555E;font-size:12px;line-height:1.7}
+#foot{color:#55555E;font-size:12px;line-height:1.7}#foot a{color:var(--dim);text-decoration:none}#foot a:hover{color:var(--acc);text-decoration:underline}
 @media (max-width:480px){.spd{padding:6px 7px}#pm-time{display:none}}
 /* wide screens: chapters move to a side column so the picture can be as tall as the window */
 @media (min-width:1000px) and (min-aspect-ratio:1/1){
@@ -43,7 +43,7 @@ body.still #stage{width:1080px;height:calc(1080px/var(--ar))}body.still canvas{b
 </style></head><body>
 <div id="app">
  <div id="main">
-  <div id="top"><span id="pm-title"></span><b>VividPaper</b></div>
+  <div id="top"><span id="pm-title"></span><b id="pm-brand">VividPaper</b></div>
   <div id="stage"><canvas id="pm" width="1080" height="1440"></canvas><button id="pm-big" aria-label="播放">▶</button></div>
   <div id="ctrl">
     <button id="pm-play" aria-label="播放/暂停">▶</button>
@@ -54,7 +54,7 @@ body.still #stage{width:1080px;height:calc(1080px/var(--ar))}body.still canvas{b
  </div>
  <div id="side">
   <div id="pm-chaps"></div>
-  <div id="foot">VividPaper · 张指导出品<br><span id="pm-keys">空格 播放/暂停 · ←/→ 跳 5 秒 · 1/2/4 切倍速</span></div>
+  <div id="foot"><span id="pm-credit"></span>VividPaper · <a href="https://github.com/ManagerZhang10/vividpaper" target="_blank" rel="noopener">★ github.com/ManagerZhang10/vividpaper</a><br><span id="pm-keys">空格 播放/暂停 · ←/→ 跳 5 秒 · 1/2/4 切倍速</span></div>
  </div>
 </div>
 <script>/*__ENGINE__*/</script>

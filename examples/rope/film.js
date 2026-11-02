@@ -1,4 +1,4 @@
-// RoFormer: Enhanced Transformer with Rotary Position Embedding（RoPE）— 3 分钟动效解读 · 张指导出品
+// RoFormer: Enhanced Transformer with Rotary Position Embedding（RoPE）— 3 分钟动效解读 · VividPaper
 // 主线：注意力分不清词序，怎样让分数只看两个词隔多远？主角：论文图 1 那句话里的 Embedding（q，第 6 个）和 Transformer（k，第 2 个）。
 
 const WORDS = ['Enhanced', 'Transformer', 'with', 'Rotary', 'Position', 'Embedding'];

@@ -1,4 +1,4 @@
-// An Image is Worth 16x16 Words（ViT）— 3 分钟动效解读 · 张指导出品
+// An Image is Worth 16x16 Words（ViT）— 3 分钟动效解读 · VividPaper
 // 主线：图像能不能像句子一样，直接交给 Transformer？主角：猫图里猫左眼那一块 patch（第 6 行第 5 列，序号 75）。
 
 const N = 14, PR = 5, PC = 4, PID = PR * N + PC;          // 224 / 16 = 14 块一行；主角是第 75 块

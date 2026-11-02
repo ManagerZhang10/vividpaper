@@ -5,7 +5,7 @@ film.js 只做一件事：调用一次 `PM.film({...})`。
 ```js
 PM.film({
   paper: { title: 'Attention Is All You Need', byline: 'Vaswani 等 · Google · NIPS 2017', arxiv: '1706.03762' },
-  tool: false,                                                // 可选：不显示「VividPaper」字样（本地自用的片子），右上角改回「张指导出品」
+  brand: '张指导出品',                                         // 可选：每帧右上角和默认片头的品牌字，不写就是「VividPaper」；片尾的工具署名不变（见下文「署名」）
   layout: 'portrait',                                         // 可选：9:16 竖屏视频版式（1080×1920），不写就是 3:4 网页版式；见下文「画布」
   question: '翻译模型能不能**完全不用 RNN**，只靠注意力？',   // 片头的主线问题，**…** 是强调色
   opening: { source: 'Google NIPS 2017', badges: ['Google', 'NIPS 2017'], why: '…', points: ['…', '…'], hero(g, box) { /* … */ } },
@@ -28,7 +28,7 @@ PM.film({
 });
 ```
 
-片头（3.6 秒）、片尾回顾、每幕的淡入淡出、左上角章节号、右上角「VividPaper」、底部字幕，引擎都会自动画，film.js 不用管。
+片头（3.6 秒）、片尾回顾和工具署名、每幕的淡入淡出、左上角章节号、右上角品牌字（`brand`，默认「VividPaper」）、底部字幕，引擎都会自动画，film.js 不用管。
 
 ## 时间
 
@@ -112,6 +112,13 @@ recap: [
 ```
 
 完整写法见 `example-attention.js` 末尾的 `recapRnn / recapSelf / recapQkv / recapArch`。画什么、怎么画，看 craft.md 第 7 条。
+
+## 署名（brand）
+
+- **片尾的工具署名每部片子都有，没有开关**：分隔线下一行小字「本视频由开源工具 VividPaper 生成」，下面一个徽章，左段灰底「★ Star」、右段橙底「ManagerZhang10/vividpaper」。播放器页脚也带这个仓库的链接，页面标题写 VividPaper。film.js 不要另画东西盖住它。
+- **右上角品牌字由 `brand` 决定**：每一帧右上角（含片头模板和 `introDraw` 片头）、默认片头左上的品牌字、播放器右上角都显示它，不写就是「VividPaper」。要署自己的名字就写 `brand: '张指导出品'`，页脚会写成「张指导出品 · VividPaper · ★ github.com/ManagerZhang10/vividpaper」。
+- `brand` 写短一点，8 个字以内。太长时左上角的章节名会自动缩小让位，缩到太小自查会报「字太小」。写空字符串或不是文字会直接报错。
+- 旧写法 `tool: false` 等价于 `brand: '张指导出品'`，旧片子不用改；同时写了 `brand` 就以 `brand` 为准。片尾的工具署名照样会画。新片请直接写 `brand`。
 
 ## 导出接口（给转视频之类的外部工具用）
 

@@ -1,4 +1,4 @@
-// VividPaper engine · 张指导出品
+// VividPaper engine · https://github.com/ManagerZhang10/vividpaper
 // Every frame is a pure function of time t: the same t always gives the same picture.
 // No CSS animation and no real clock inside draw(); that is what makes seeking, 4× and the self-check work.
 'use strict';
@@ -12,7 +12,11 @@ const PM = (() => {
       head: [80, 300, 600], dy: 160 },
   };
   let LY = LAYOUTS.card, W = LY.W, H = LY.H, ZONE = LY.ZONE;   // content lives between ZONE.top and ZONE.bottom; captions below
-  const BRAND = '张指导出品', TOOL = 'VividPaper', SLOGAN = '3 分钟看懂一篇论文';
+  // credits. The end card of every film says it was made with the tool and shows a 「★ Star | repo」 badge, with no option to
+  // turn it off; film.js `brand` only sets the name in the top-right corner of every frame and on the default title card
+  // (old films wrote tool: false for OWN)
+  const TOOL = 'VividPaper', REPO = 'ManagerZhang10/vividpaper', SLOGAN = '3 分钟看懂一篇论文', OWN = '张指导出品';
+  let BRAND = TOOL;
   const COL = {
     bg: '#0B0B0E', panel: '#15151A', fg: '#F4F3EF', sub: '#C9C9CF', dim: '#8A8A92', faint: '#3A3A42', line: '#26262C',
     acc: '#FF6A2C', acc2: '#FFB089', blue: '#5AA9FF', green: '#3DDC97', yellow: '#FFD23F', purple: '#B48CFF', red: '#FF4B4B', white: '#FFFFFF',
@@ -378,17 +382,20 @@ const PM = (() => {
   };
 
   // ---------- chrome: header, captions, brand ----------
+  // the orange square + a name; markW = how wide it is
+  function markW(size, label) { X.font = FONT.cn(size, 700); return X.measureText(label).width + size * .62 + 12; }
   function brandMark(x, y, size, a = 1, align = 'right', label = BRAND) {
-    X.font = FONT.cn(size, 700); const tw = X.measureText(label).width, sq = size * .62;
-    const x0 = align === 'right' ? x - tw - sq - 12 : align === 'center' ? x - (tw + sq + 12) / 2 : x;
+    const w = markW(size, label), sq = size * .62;
+    const x0 = align === 'right' ? x - w : align === 'center' ? x - w / 2 : x;
     D.rect(x0, y - sq / 2, sq, sq, { r: sq * .28, fill: COL.acc, alpha: a });
     rich([[label, COL.fg]], x0 + sq + 12, y + 1, { size, weight: 700, align: 'left', alpha: a, kind: 'brand' });
   }
   function header(sc, a) {
     if (sc.builtin) return;
-    const [hx, hy, hw] = LY.head;   // chapter number + name on the left, 张指导出品 on the right of the same row
+    const [hx, hy, hw] = LY.head;   // chapter number + name on the left, the brand on the right of the same row (corner())
     D.chip(String(sc.num).padStart(2, '0'), hx, hy, { size: 26, align: 'left', alpha: a, kind: 'chrome' });
-    D.text(sc.name, hx + 72, hy, { size: 30, align: 'left', color: COL.sub, alpha: a, kind: 'chrome', maxW: hw });
+    const room = W - hx - markW(26, BRAND) - 24 - (hx + 72);   // a long brand makes a long chapter name shrink instead of running into it
+    D.text(sc.name, hx + 72, hy, { size: 30, align: 'left', color: COL.sub, alpha: a, kind: 'chrome', maxW: Math.min(hw, room) });
   }
   // wrap caption spans into ≤2 lines of ≤ maxW px; ASCII words never split, closing punctuation never starts a line
   function wrapCaption(parts, size, maxW) {
@@ -424,16 +431,14 @@ const PM = (() => {
     return out.map(l => l.trim()).filter(Boolean);
   }
   function wrapCN(s, size, maxW, base = COL.fg, hl = COL.acc) { return wrapCaption(spans(s, base, hl), size, maxW); }
-  // tool: false (local films) drops the tool name and keeps the slogan; the 张指导出品 credit always stays
-  const tag = () => FILM.tool === false ? SLOGAN : `${TOOL} · ${SLOGAN}`;
-  // top-right corner of every frame advertises the tool; local films keep the credit
-  const corner = () => brandMark(W - LY.head[0], LY.head[1], 26, .9, 'right', FILM.tool === false ? BRAND : TOOL);
+  // top-right corner of every frame: the brand (VividPaper unless film.js sets brand)
+  const corner = () => brandMark(W - LY.head[0], LY.head[1], 26, .9, 'right');
   function intro(t, sc) {
     if (FILM.opening) return openingPic(t, sc);
     if (FILM.introDraw) return introPic(t, sc);
     const p = FILM.paper || {}, a0 = prog(t, 0, .7), dy = LY.dy;   // both layouts are 1080 wide; portrait moves everything down by dy
     brandMark(80, 140 + dy, 40, prog(t, .2, .6), 'left');
-    D.text(tag(), 80, 214 + dy, { size: 28, align: 'left', color: COL.dim, alpha: .5 + .5 * a0 });
+    D.text(SLOGAN, 80, 214 + dy, { size: 28, align: 'left', color: COL.dim, alpha: .5 + .5 * a0 });
     const tl = wrapWords(p.title || '', 84, 920);
     tl.forEach((s, i) => D.text(s, 80, 360 + dy + i * 104 + (1 - a0) * 30, { size: 84, weight: 800, font: 'disp', align: 'left', alpha: .35 + .65 * a0 }));
     const yb = 360 + dy + tl.length * 104;
@@ -513,8 +518,16 @@ const PM = (() => {
     });
     const b = prog(t, sc.endT ?? sc.dur - 3.0, .7);
     D.line(80, 970 + dy, 80 + 920 * b, 970 + dy, { color: COL.faint, lw: 2 });
-    brandMark(W / 2, 1050 + dy, 56, b, 'center');
-    D.text(tag(), W / 2, 1125 + dy, { size: 30, color: COL.dim, alpha: b });
+    // the end card is the same in every film, whatever brand says: made with VividPaper, and a GitHub-style badge
+    // 「★ Star | ManagerZhang10/vividpaper」 (grey half, orange half) so whoever watches can find the repo
+    D.text(`本视频由开源工具 ${TOOL} 生成`, W / 2, 1018 + dy, { size: 26, color: COL.dim, alpha: b });
+    const star = '★ Star', bh = 64, by = 1060 + dy;
+    X.font = FONT.cn(32, 800); const wl = X.measureText(star).width + 48;
+    X.font = FONT.mono(30, 700); const wr = X.measureText(REPO).width + 48, bx = W / 2 - (wl + wr) / 2;
+    D.rect(bx, by, wl + wr, bh, { r: 12, fill: '#2A2A31', alpha: b });
+    D.rect(bx + wl, by, wr, bh, { r: [0, 12, 12, 0], fill: COL.acc, alpha: b });
+    rich([[star, COL.fg]], bx + wl / 2, by + bh / 2 + 1, { size: 32, weight: 800, alpha: b });
+    rich([[REPO, '#111']], bx + wl + wr / 2, by + bh / 2 + 1, { size: 30, weight: 700, font: 'mono', alpha: b });
   }
 
   // ---------- one frame ----------
@@ -686,6 +699,8 @@ const PM = (() => {
     }
     const chapters = TL.scenes.filter(s => !s.builtin);
     $('pm-title').textContent = (FILM.paper && FILM.paper.title) || '';
+    $('pm-brand').textContent = BRAND;   // the corner above the picture matches the one in it; the footer always links the repo
+    if (BRAND !== TOOL) $('pm-credit').textContent = BRAND + ' · ';
     const ticks = $('pm-ticks');
     chapters.forEach(sc => {
       const b = document.createElement('button'); b.className = 'chap'; b.dataset.id = sc.id;
@@ -730,6 +745,9 @@ const PM = (() => {
     C = document.getElementById('pm'); C.width = W; C.height = H; X = C.getContext('2d');
     document.documentElement.style.setProperty('--ar', W / H);   // player.html sizes the stage from this
     if (!FILM) throw new Error('film.js 里没有调用 PM.film({...})');
+    const b = FILM.brand;   // tool: false is the old way of writing brand: OWN
+    if (b != null && !(typeof b === 'string' && b.trim())) throw new Error(`brand 要写成一段文字，例如 brand: '${OWN}'；不写就是「${TOOL}」`);
+    BRAND = b != null ? b.trim() : FILM.tool === false ? OWN : TOOL;
     await loadAssets(); TL = timeline(FILM);
     const q = new URLSearchParams(location.search);
     if (q.has('script')) {   // voice.py: everything that will be read aloud, in order
@@ -747,10 +765,6 @@ const PM = (() => {
   function film(f) {
     if (f.layout != null && f.layout !== 'portrait') throw new Error(`layout 只能不写（3:4）或写 'portrait'（9:16），不认识「${f.layout}」`);
     FILM = f; LY = LAYOUTS[f.layout || 'card']; ({ W, H, ZONE } = LY);
-    if (f.tool === false) {   // no tool name anywhere on the page: the corner and the footer show the credit instead
-      const ft = document.getElementById('foot'), tp = document.querySelector('#top b');
-      if (ft && ft.firstChild) ft.firstChild.nodeValue = BRAND; if (tp) tp.textContent = BRAND;
-    }
   }
   return { render: t => render(t), timeline: () => TL, film, boot, get W() { return W; }, get H() { return H; }, COL };
 })();

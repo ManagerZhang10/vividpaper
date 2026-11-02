@@ -46,8 +46,9 @@ def main():
                        capture_output=True, text=True, timeout=600)
     m = re.search(r'<pre id="pm-audit">(.*?)</pre>', r.stdout, re.S)
     if not m:
-        err = re.search(r'<pre style="color:#FF4B4B[^>]*>(.*?)</pre>', r.stdout, re.S)
-        sys.exit("自查没跑出结果：" + (html.unescape(err.group(1)) if err else r.stderr[-800:]))
+        # the error box boot() adds; the page's own script, which builds that box, matches the pattern too
+        err = [e for e in re.findall(r'<pre style="color:#FF4B4B[^>]*>(.*?)</pre>', r.stdout, re.S) if "e.message" not in e]
+        sys.exit("自查没跑出结果：" + (html.unescape(err[-1]) if err else r.stderr[-800:]))
     out = json.loads(html.unescape(m.group(1)))
 
     stem = f.with_suffix("")
