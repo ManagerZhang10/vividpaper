@@ -467,6 +467,16 @@ const PM = (() => {
   // headline lights up word by word as it is said, from 0 s. The source badges come up while 「今天解读…」 is said, the
   // reasons to read it while the third piece is said.
   let OPEN_BOX = null;   // the hero box, for the self-check
+  // the question is lit up character by character over its spoken piece (intro piece 0); qAt(word) is when the voice reaches word
+  function qTiming(sc) {
+    const s0 = sc.segs && sc.segs[0], chars = Array.from(txt(FILM.question || '').replace(/\*\*/g, '').replace(/\s+/g, ''));
+    return { t0: s0 ? s0.t0 : 0, len: s0 ? Math.max(.5, (s0.t1 - s0.t0 - GAP) * .95) : 0, chars };
+  }
+  function qAt(sc, word) {
+    const q = qTiming(sc), w = Array.from(String(word).replace(/\s+/g, '')), s = q.chars.join(''), i = s.indexOf(w.join(''));
+    if (!FILM.question || i < 0) throw new Error(`g.qAt('${word}')：问题句里没有这个词`);
+    return q.t0 + q.len * Array.from(s.slice(0, i)).length / Math.max(1, q.chars.length);
+  }
   function openingPic(t, sc) {
     const op = FILM.opening, p = FILM.paper || {}, dy = LY.dy, g = G(sc, t);
     const tl = wrapWords(p.title || '', 30, 920), lh = 30 * 1.22, y0 = 170 + dy;
@@ -475,18 +485,23 @@ const PM = (() => {
     D.text(p.byline || '', 80, by, { size: 22, align: 'left', color: COL.sub });
     // the question, word for word what is said first; dim until said, each character lights up as the voice reaches it
     const QS = 56, QLH = 76, ql = FILM.question ? wrapCN(txt(FILM.question), QS, 880, COL.fg, COL.acc) : [];   // measured at 600, drawn at 700: leave room
-    const qy = by + 90, s0 = sc.segs[0], nQ = ql.reduce((a, ln) => a + ln.reduce((b, q) => b + Array.from(q[0]).length, 0), 0);
-    let lit = s0 ? Math.round(nQ * prog(t, s0.t0, Math.max(.5, (s0.t1 - s0.t0 - GAP) * .95), 'lin')) : nQ;
+    const qy = by + 90, s0 = sc.segs[0], qt = qTiming(sc);
+    let lit = s0 ? Math.round(qt.chars.length * prog(t, qt.t0, qt.len, 'lin')) : 1e9;   // counted without spaces, like g.qAt
     ql.forEach((ln, i) => {
       const parts = [];
-      ln.forEach(([str, c]) => { const ch = Array.from(str), k = clamp(lit, 0, ch.length); lit -= ch.length;
+      ln.forEach(([str, c]) => {   // spaces don't count, so the lit edge matches g.qAt
+        const ch = Array.from(str); let k = 0;
+        while (k < ch.length && (lit > 0 || /\s/.test(ch[k]))) { if (!/\s/.test(ch[k])) lit--; k++; }
         if (k) parts.push([ch.slice(0, k).join(''), c]); if (k < ch.length) parts.push([ch.slice(k).join(''), COL.dim]); });
       rich(parts, 80, qy + i * QLH, { size: QS, weight: 700, align: 'left' });
     });
-    // the rows at the bottom, and the box the hero gets: from under the question down to above the badges
+    // the rows at the bottom, and the box the hero gets: while the question is said it runs from under the question down to
+    // the captions (the badges are not up yet); as the second piece starts it shrinks to end above the badges
     const yBadge = ZONE.bottom - 240, yPoint = ZONE.bottom - 135;
     const top = qy + (ql.length ? (ql.length - 1) * QLH + QS / 2 : -60) + 52;
-    const box = { x: 84, y: top, w: 912, h: Math.max(120, yBadge - 70 - top) };   // inset so a stroke round the hero stays inside the safe area
+    const big = ZONE.bottom - 30 - top, small = Math.max(120, yBadge - 70 - top);
+    const shrink = (op.source || op.why) && s0 ? prog(t, s0.t1 - .1, .6, 'io') : 0;
+    const box = { x: 84, y: top, w: 912, h: lerp(big, small, shrink) };   // inset so a stroke round the hero stays inside the safe area
     OPEN_BOX = box;
     corner();
     if (op.hero) op.hero(g, box);
@@ -564,7 +579,8 @@ const PM = (() => {
     const ls = sc.segs || sc.lines;   // in introDraw, i counts spoken intro pieces, not caption chunks
     const L = i => { if (!ls[i]) throw new Error(`L(${i}) 超出「${sc.id}」的${sc.segs ? '开场白段数' : '字幕条数'} ${ls.length}`); return ls[i].t0; };
     const Le = i => { L(i); return ls[i].t1; };
-    return { ...D, t, dur: sc.dur, W, H, COL, E, ZONE, ctx: X, clamp, lerp, rgba, L, Le,
+    const qa = sc.builtin === 'intro' ? w => qAt(sc, w) : () => { throw new Error('g.qAt 只能在片头（opening.hero / introDraw）里用'); };
+    return { ...D, t, dur: sc.dur, W, H, COL, E, ZONE, ctx: X, clamp, lerp, rgba, L, Le, qAt: qa,
       p: (a, d = .5, e = 'out') => prog(t, a, d, e), win: (a, b, fi, fo) => win(t, a, b, fi, fo) };
   }
 
