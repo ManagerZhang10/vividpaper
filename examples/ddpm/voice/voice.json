@@ -2,10 +2,20 @@
  "engine": "edge:zh-CN-YunxiNeural:+30%",
  "voice": "zh-CN-YunxiNeural",
  "clips": {
-  "这篇论文回答一个问题：怎么从纯噪声一步步「洗」出一张图？": {
-   "file": "d7c7ac8e7c27.mp3",
-   "dur": 4.296,
-   "end": 4.281
+  "怎么从纯噪声一步步「洗」出一张图？": {
+   "file": "b5186a75408b.mp3",
+   "dur": 2.76,
+   "end": 2.752
+  },
+  "今天解读 UC Berkeley NeurIPS 2020 的论文 DDPM": {
+   "file": "e14f20bf77c4.mp3",
+   "dur": 4.416,
+   "end": 4.396
+  },
+  "无条件生成 CIFAR-10，FID 做到 3.17，超过 StyleGAN2 + ADA 的 3.26；整个模型在一台 TPU v3-8 上训 10.6 小时": {
+   "file": "0215e6ca8a51.mp3",
+   "dur": 9.84,
+   "end": 9.829
   },
   "先反过来想：把一张图毁掉很容易，每一步往上加一点点高斯噪声": {
    "file": "26a2d3448ba7.mp3",

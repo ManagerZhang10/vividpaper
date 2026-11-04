@@ -37,9 +37,74 @@ function catGrid(g, x, y, s, o = {}) {
   return (r, cc) => ({ x: x + cc * c, y: y + r * c, w: c, cx: x + (cc + .5) * c, cy: y + (r + .5) * c });
 }
 
+// opening hero: the cat is cut 14×14 from frame 0 (「图像」), the first patches fly out into a numbered row (「像句子一样」),
+// and the row slides into a Transformer box (「直接交给 Transformer」); all sizes follow box, which shrinks after line 1
+function heroCut(g, box) {
+  const { COL } = g;
+  const BH = 124, S = Math.min(box.h - BH - 20, 600), X0 = box.x, Y0 = box.y, c = S / N;
+  // timing, hung on the words of the question
+  const tFly = g.qAt('像句子一样') + .15, tSend = Math.max(g.qAt('直接交给'), tFly + .8);
+  const sweep = 1 / (N - 1) + (1 - 1 / (N - 1)) * g.p(0, tFly, 'lin');          // frame 0: the first cut is already there
+  const cuts = sweep * (N - 1);                                                // how many lines (each way) are cut so far
+  // the slots of the sentence row in reading order: patches 1–3, …, 74–76 (75 = the cat's eye, the film's protagonist), …, 196
+  const ids = [0, 1, 2, null, PID - 1, PID, PID + 1, null, N * N - 1], TW = 42, PIT = 48;
+  const BW = 470, bx = X0 + box.w - BW, by = Y0 + box.h - BH, rowW = ids.length * PIT - (PIT - TW);
+  const send = g.p(tSend, .8, 'io'), lit = g.p(tSend + .2, .5);
+  const off = g.lerp(0, bx + BW / 2 - (X0 + rowW / 2), send), ty = by + 40;
+  const sx = k => X0 + k * PIT + off;
+  const fly = k => g.p(tFly + k * .07, .55, 'io');
+  // the image: the cat and its 14×14 cut, the newest cut line in orange
+  g.img('cat', X0, Y0, S, S);
+  for (let i = 1; i < N; i++) {
+    const k = g.clamp(cuts - (i - 1)); if (k <= 0) continue;
+    const col = g.rgba(cuts - i < 1.5 && cuts < N - 1.01 ? COL.acc : '#FFFFFF', .85);
+    g.line(X0 + i * c, Y0, X0 + i * c, Y0 + S, { color: col, lw: 2, k });
+    g.line(X0, Y0 + i * c, X0 + S, Y0 + i * c, { color: col, lw: 2, k });
+  }
+  // a patch that has flown out leaves a dark hole in the cat
+  ids.forEach((id, k) => {
+    if (id == null) return; const f = fly(k); if (f <= 0) return;
+    g.rect(X0 + (id % N) * c, Y0 + Math.floor(id / N) * c, c, c, { fill: g.rgba('#000000', .5 * Math.min(1, f * 2)), r: 0 });
+  });
+  // right of the cat: the labels named in the question
+  // (when box shrinks after line 1 the column closes up and drops its small print, so it stays beside the cat)
+  const lx = X0 + S + 40, sh = g.clamp((470 - S) / 120), at = (big, small) => Y0 + g.lerp(big, small, sh);
+  g.text('**图像** · 224 × 224 像素', lx, at(26, 18), { size: 30, align: 'left', color: COL.sub });
+  const n = Math.min(N * N, Math.round((cuts + 1) ** 2));
+  g.rich([[String(n), COL.acc], [' / 196 块', COL.fg]], lx, at(104, 78), { size: 56, font: 'disp', weight: 800, align: 'left' });
+  g.text('每块 16 × 16 像素', lx, at(158, 120), { size: 26, align: 'left', color: COL.dim, alpha: 1 - sh });
+  const w1 = g.p(tFly, .4);
+  g.chip('1 块 = 1 个词', lx, at(214, 146), { size: 30, align: 'left', solid: w1 > .5, color: w1 > .5 ? COL.acc : COL.faint });
+  g.text('整张图 = 一句话', lx, at(270, 206), { size: 30, align: 'left', color: COL.fg, alpha: .3 + .7 * g.p(tFly + .6, .4) });
+  // the Transformer box, faint until the row is handed to it
+  g.rect(bx, by, BW, BH, { r: 16, fill: g.rgba(COL.blue, .16 * lit), stroke: lit > .5 ? COL.blue : COL.faint, lw: 3, ...(lit > .5 ? {} : { dash: [10, 8] }) });
+  g.text('Transformer', bx + BW / 2, by + 22, { size: 30, font: 'disp', weight: 700, color: COL.blue, alpha: .35 + .65 * lit });
+  g.arrow(X0 + 20, by + 61, bx - 14, by + 61, { color: COL.sub, lw: 3, head: 12, k: send, alpha: send * (1 - lit * .4) });
+  // the sentence row: each patch flies from its cell to its slot, numbered like word positions
+  ids.forEach((id, k) => {
+    const f = fly(k), x = sx(k);
+    if (id == null) { g.text('…', x + TW / 2, ty + TW / 2, { size: 30, color: COL.sub, alpha: f }); return; }
+    g.rect(x, ty, TW, TW, { r: 3, stroke: COL.faint, lw: 2, dash: [6, 6], alpha: 1 - f });   // the empty slot, waiting
+    if (f <= 0) return;
+    const r = Math.floor(id / N), cc = id % N;
+    const tx = g.lerp(X0 + cc * c, x, f), yy = g.lerp(Y0 + r * c, ty, f), w = g.lerp(c, TW, f);
+    tile(g, r, cc, tx, yy, w);
+    const eye = id === PID;
+    g.rect(tx, yy, w, w, { stroke: COL.acc, lw: eye ? 4 : 2, r: 3, alpha: eye ? 1 : 1 - send * .6 });
+    g.text(String(id + 1), x + TW / 2, ty + TW + 20, { size: 24, font: 'disp', color: eye ? COL.acc : COL.sub, alpha: g.p(tFly + k * .07 + .4, .3) });
+  });
+}
+
 PM.film({
-  paper: { title: 'An Image is Worth 16x16 Words', byline: 'Dosovitskiy 等 12 位作者 · Google Research · ICLR 2021', arxiv: '2010.11929' },
+  paper: { title: 'ViT', full: 'An Image is Worth 16x16 Words: Transformers for Image Recognition at Scale', byline: 'Dosovitskiy 等 12 位作者 · Google Research · ICLR 2021', arxiv: '2010.11929' },
   question: '图像能不能像句子一样，**直接交给 Transformer**？',
+  opening: {
+    source: 'Google ICLR 2021',
+    badges: ['Google Research', 'ICLR 2021'],
+    why: '在 ImageNet 上拿到 **88.55%**，超过 CNN 强基线 BiT-L，预训练算力只要它的约四分之一',
+    points: ['ImageNet **88.55%**', '超过 CNN 的 BiT-L', '预训练算力约 **1/4**'],
+    hero: heroCut,
+  },
   recap: [
     '把图切成 16×16 的 **patch**，一块当一个词',
     { text: '拉平 → 乘 E → 加位置编码，前面插 **[class]**', say: '拉平，乘 E，加位置编码，前面插一个 class token' },

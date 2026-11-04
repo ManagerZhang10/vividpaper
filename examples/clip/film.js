@@ -66,8 +66,55 @@ function card(g, i, x, y, a = 1, o = {}) {
 const fmt1 = v => (v * 100).toFixed(0) + '%';
 
 PM.film({
-  paper: { title: 'Learning Transferable Visual Models From Natural Language Supervision', byline: 'Radford 等 12 位作者 · OpenAI · 2021', arxiv: '2103.00020' },
+  paper: { title: 'CLIP', full: 'Learning Transferable Visual Models From Natural Language Supervision', byline: 'Radford 等 12 位作者 · OpenAI · 2021', arxiv: '2103.00020' },
   question: '不给人工标签，模型能不能**光靠网上的图文配对**学会认图？',
+  opening: {
+    source: 'OpenAI 2021',
+    badges: ['OpenAI', '2021'],
+    // 3.1.3 节 + Table 1：11.5% → 76.2%，追平原版 ResNet-50，没用 ImageNet 的 128 万张标注图（摘要同句）
+    why: { text: 'ImageNet 的 128 万张标注图一张没用，zero-shot 准确率就到了 **76.2%**，追平原版 ResNet-50',
+           say: 'ImageNet 的 128 万张标注图一张没用，zero-shot 准确率就到了 76.2%，追平原版 ResNet 50' },
+    points: ['0 张 ImageNet 标注图', 'zero-shot **76.2%**', '追平原版 ResNet-50'],
+    // 主图：论文图 1 左那张 N×N 配对表，缩成 4×4。行 = 4 张图（猫在第 1 行），列 = 4 句网上配的话。
+    // 0 秒起对角线一格格变亮（训练把真配对拉高）；「人工标签」：猫的类别号被划掉；
+    // 「图文配对」：对角线变实心橙、其余 12 格压暗；「学会认图」：猫那一行认出自己那句话 ✓
+    hero(g, b) {
+      const { COL } = g;
+      const tL = g.qAt('人工标签'), tP = g.qAt('图文配对'), tR = g.qAt('学会认图');
+      const HH = 104, GAP = 8, IW = 176;                                   // header height, cell gap, image column
+      const rowH = Math.min(150, (b.h - HH - 3 * GAP) / 4), cw = (b.w - IW - 3 * GAP) / 4;
+      const y0 = b.y + (b.h - (HH + 4 * rowH + 3 * GAP)) / 2;
+      const cx = j => b.x + IW + j * (cw + GAP), cy = i => y0 + HH + i * (rowH + GAP);
+      const HEAD = [['my cat', 'staring at', 'the camera'], ['sunset', 'over the', 'mountains'], ['a red car', 'parked', 'outside'], ['morning', 'coffee on', 'my desk']];
+      const won = g.p(tR, .4);                                             // the cat row has found its sentence
+      // column headers: the four captions as found on the web
+      HEAD.forEach((ls, j) => ls.forEach((s, k) =>
+        g.text(s, cx(j) + cw / 2, y0 + 20 + k * 30, { size: 26, font: 'mono', color: j === 0 && won > .5 ? COL.acc : TXT_C })));
+      // row headers: the four images
+      const ts = Math.min(rowH, IW - 24);
+      PAIRS.forEach((p, i) => tile(g, p.k, b.x + (IW - 16 - ts) / 2, cy(i) + (rowH - ts) / 2, ts, 1, i === 0 && won > 0 ? { stroke: COL.acc, lw: 4 * won } : {}));
+      // the human label the cat would have had, in the empty corner — struck out at 「人工标签」
+      const ks = g.p(tL + .15, .45), fade = 1 - .65 * g.p(tL + .7, .5), lx = b.x + (IW - 16) / 2;
+      g.text('人工标签', lx, y0 + 26, { size: 24, color: COL.sub, alpha: fade });
+      const R = g.chip('类别 #281', lx, y0 + 70, { size: 26, color: COL.yellow, alpha: fade });
+      g.line(R.x - 6, y0 + 50, R.x + R.w + 6, y0 + 88, { color: COL.red, lw: 5, k: ks });
+      // the 16 cells: training lights the diagonal one row at a time from 0 s up to 「图文配对」, and pushes the rest of that row down
+      const d = Math.max(.3, tP / 4), solid = g.p(tP, .4), dark = g.p(tP + .1, .5);
+      for (let i = 0; i < 4; i++) {
+        const u = g.p(i * d, d, 'out');
+        for (let j = 0; j < 4; j++) {
+          const x = cx(j), y = cy(i);
+          g.rect(x, y, cw, rowH, { r: 10, fill: '#24242B', stroke: COL.line, lw: 2, alpha: i === j ? 1 : 1 - .3 * u - .4 * dark });
+          if (i === j) g.rect(x, y, cw, rowH, { r: 10, fill: COL.acc, alpha: .06 + .5 * u + .44 * solid });
+        }
+      }
+      // 「图文配对」: the diagonal is the whole training signal
+      g.chip('图文配对', cx(0) + cw + GAP / 2, cy(3) + rowH / 2, { size: 30, solid: true, alpha: g.p(tP + .2, .4) });
+      // 「学会认图」: the cat row picks its own sentence
+      g.text('✓', cx(0) + cw / 2, cy(0) + rowH / 2, { size: Math.min(64, rowH * .7), weight: 800, color: '#111', alpha: won });
+      g.chip('认出：猫', cx(2) + GAP / 2, cy(0) + rowH / 2, { size: 30, color: COL.acc, alpha: won });
+    },
+  },
   recap: [
     '人工标签只认固定类别；网上有**现成的图文**',
     '不猜原句，只猜**哪张图配哪句话**，学得快',

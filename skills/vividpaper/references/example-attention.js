@@ -6,14 +6,24 @@ const ITS = 8, LAW = 1, APP = 9;
 // 论文图 4：its 在两个注意力头里分别盯住 Law 和 application；其余是示意的小权重（总和为 1）
 const ATT = [.03, .38, .03, .03, .02, .05, .01, .05, .04, .30, .02, .02, .02];
 
+// 片头主图用的 8 个词（同一句话的一段）和 its 看它们的权重（与 ATT 一致）
+const H_WORDS = ['Law', 'will', 'never', 'be', 'perfect', 'but', 'its', 'application'], H_ITS = 6, H_LAW = 0, H_APP = 7;
+const H_ATT = [.38, .03, .03, .02, .05, .05, 0, .30];
 function rng(seed) { let s = seed >>> 0; return () => ((s = (s * 1664525 + 1013904223) >>> 0) / 4294967296); }
 function vals(seed, n = 4) { const r = rng(seed); return Array.from({ length: n }, () => .15 + .85 * r()); }
 // the same sentence, laid out the same way in every scene that shows it
 const sentence = (g, y, style, o = {}) => g.tokens(WORDS, 540, y, { breaks: [7], rowGap: 200, size: 38, style, ...o });
 
 PM.film({
-  paper: { title: 'Attention Is All You Need', byline: 'Vaswani 等 8 位作者 · Google · NIPS 2017', arxiv: '1706.03762' },
+  paper: { title: 'Transformer', full: 'Attention Is All You Need', byline: 'Vaswani 等 8 位作者 · Google · NIPS 2017', arxiv: '1706.03762' },
   question: '翻译模型能不能**完全不用 RNN**，只靠注意力？',
+  opening: {   // 片头：问题 → 出处 → 为什么值得读；主图 heroAttn 在文件末尾
+    source: 'Google NIPS 2017',
+    badges: ['Google', 'NIPS 2017'],
+    why: '去掉 RNN 之后，英译德拿到 **28.4** BLEU，比之前最好的结果高 2 分以上，只用 8 块 GPU 训了 3.5 天',   // 摘要；6.1 节、Table 2
+    points: ['英译德 **28.4** BLEU', '比此前最好 **+2** 以上', '8 块 GPU · 3.5 天'],
+    hero: heroAttn,
+  },
   recap: [   // 每条一行（≤ 12 字），右边的小框画那一幕机制的简化版（函数在文件末尾）
     { text: 'RNN 逐词传：**慢**、传不远', draw: recapRnn },
     { text: '注意力：每个词**直接看**全句', draw: recapSelf },
@@ -225,9 +235,14 @@ PM.film({
         const ws = ['but', 'its', 'application', 'should', 'be', 'just'], order = [3, 5, 0, 4, 2, 1];
         const R0 = g.tokens(ws, 540, 220, { size: 38, draw: false }), R1 = g.tokens(order.map(i => ws[i]), 540, 220, { size: 38, draw: false });
         const to = []; order.forEach((w, k) => { to[w] = R1[k].cx; });
-        // words move one after another, alternately lifted above / dropped below the row, so none pass through each other
-        const sh = i => g.p(L(0) + 1.2 + i * .3, .7, 'io') * (1 - g.p(L(1) + i * .15, .6, 'io'));
-        g.tokens(ws, 540, 220, { size: 38, style: i => ({ dx: (to[i] - R0[i].cx) * sh(i), dy: Math.sin(sh(i) * Math.PI) * (i % 2 ? -80 : 80), stroke: i === 1 ? COL.acc : COL.faint, lw: i === 1 ? 4 : 2 }) });
+        // shuffle: words moving right travel in a lane above the row, words moving left in a lane below; in each lane the one going
+        // furthest leaves first, so nobody overtakes anybody; all wait in their lane and drop into the row together at the end
+        const right = ws.map((w, i) => to[i] > R0[i].cx), rank = ws.map((w, i) => ws.filter((v, j) => right[j] === right[i] && (right[i] ? to[j] > to[i] : to[j] < to[i])).length);
+        const st = i => L(0) + 1.2 + rank[i] * .6, drop = L(0) + 3.2, back = g.p(L(1), .3);
+        g.tokens(ws, 540, 220, { size: 38, style: i => ({ dx: (to[i] - R0[i].cx) * g.p(st(i) + .15, .6, 'io'), dy: (right[i] ? -80 : 80) * g.p(st(i), .25) * (1 - g.p(drop, .4, 'io')),
+          alpha: 1 - back, stroke: i === 1 ? COL.acc : COL.faint, lw: i === 1 ? 4 : 2 }) });
+        // line 1 is about the original order again: the shuffled row fades out, the original one fades back in
+        if (back > 0) g.tokens(ws, 540, 220, { size: 38, style: i => ({ alpha: g.p(L(1) + .3, .3), stroke: i === 1 ? COL.acc : COL.faint, lw: i === 1 ? 4 : 2 }) });
         const a1 = (1 - g.p(L(1), .4));
         g.text('原顺序：its 的结果', 300, 400, { size: 28, color: COL.sub, alpha: a1 * g.p(L(0) + .4, .4) });
         g.vec(300 - 64, 430, vals(42, 4), { color: COL.green, cell: 30, alpha: a1 * g.p(L(0) + .4, .4) });
@@ -363,4 +378,49 @@ function recapArch(g, b, u) {
   g.text('编码器', ex + sw / 2, b.y + b.h - 22, { size: 24, color: g.COL.acc, alpha: u(.1, .4) });
   g.text('解码器', dx + sw / 2, b.y + b.h - 22, { size: 24, color: g.COL.blue, alpha: u(.5, .4) });
   g.curve(ex + sw + 6, bot - 2 * 22 - sh / 2, dx - 6, bot - 22 - sh / 2, { bend: -16, color: g.COL.purple, lw: 4, head: 12, k: u(1.1, .6, 'io') });
+}
+
+// ---------- 片头主图：同一段话排两行，上行 RNN 一格一格往后传、越传越淡；下行注意力，its 一下连到所有词 ----------
+// 词取自论文图 4 那句话；连线粗细同第 2 幕（its 最看 Law，其次 application）。尺寸全按 box 算：box 第二句起会缩小。
+function heroAttn(g, box) {
+  const { t, COL } = g, cx = box.x + box.w / 2;
+  const tNo = g.qAt('完全不用'), tAtt = g.qAt('只靠注意力');
+  // fit the row to the box width: measure at 40 px, then scale font and gaps together
+  const M = g.tokens(H_WORDS, cx, 0, { size: 40, gap: 34, maxW: 4000, draw: false }), f = Math.min(1, box.w / (M[M.length - 1].x + M[M.length - 1].w - M[0].x));
+  const o = { size: 40 * f, gap: 34 * f, padX: 16 * f, maxW: 4000 };
+  const rowH = 40 * f * 1.75, y1 = box.y + Math.max(40, box.h * .1), y2 = Math.max(box.y + box.h * .36, y1 + rowH + 84);
+  const R1 = g.tokens(H_WORDS, cx, y1, { ...o, draw: false }), R2 = g.tokens(H_WORDS, cx, y2, { ...o, draw: false });
+  const hop = (R1[H_ITS].cx - R1[H_LAW].cx), lab = (s, y, c, a) => g.text(s, box.x + 4, y - 30, { size: 30, weight: 700, align: 'left', color: c, alpha: a });
+
+  // ── 上行 RNN：一颗光点从 Law 出发，一格一格传到 its（念到「完全不用」时刚好到），越传越淡；之后整行压暗
+  const off = 1 - .65 * g.p(tNo, .5);                         // 「完全不用 RNN」：上行压暗
+  const run = g.clamp(t / Math.max(.6, tNo)) * H_ITS;          // 0 秒起就在走
+  const fadeAt = j => Math.pow(.62, j);                         // 第 j 格还剩多少信号
+  lab('RNN', y1, COL.fg, off);
+  for (let j = 0; j + 1 < H_WORDS.length; j++) {
+    const a = R1[j], b = R1[j + 1];
+    g.arrow(a.x + a.w + 4, a.cy, b.x - 4, b.cy, { color: j < H_ITS && run > j + .5 ? COL.acc : COL.faint, lw: 3, head: 9, alpha: off });
+  }
+  g.tokens(H_WORDS, cx, y1, { ...o, style: j => {
+    const seen = j <= H_ITS && run >= j - .3, s = seen ? fadeAt(j) : 0;
+    return { alpha: off, stroke: seen ? g.rgba(COL.acc, .35 + .65 * s) : COL.faint, lw: seen ? 3 : 2, fill: seen ? g.rgba(COL.acc, .08 + .3 * s) : COL.panel };
+  } });
+  if (run < H_ITS + .5) {   // the travelling dot shrinks and dims as it goes
+    const s = fadeAt(run), x = R1[H_LAW].cx + hop * run / H_ITS;
+    g.circle(x, R1[0].top - 4, 7 + 9 * s, { fill: COL.acc, alpha: off * (.35 + .65 * s) });
+  }
+
+  // ── 下行注意力：第 0 帧淡着摆好；念到「只靠注意力」，its 同时向所有词拉线，最粗的落在 Law 上
+  const on = g.p(tAtt, .4), k = g.p(tAtt, .7, 'io');
+  lab('注意力', y2, on > .5 ? COL.acc : COL.dim, .55 + .45 * on);
+  const room = Math.max(40, box.y + box.h - R2[0].bottom - 24), far = Math.abs(R2[H_LAW].cx - R2[H_ITS].cx);
+  H_WORDS.forEach((w, j) => { if (j === H_ITS) return;
+    const d = R2[j].cx - R2[H_ITS].cx, depth = room * (.22 + .78 * Math.abs(d) / far), key = j === H_LAW || j === H_APP;
+    const arc = [R2[H_ITS].cx, R2[H_ITS].bottom + 2, R2[j].cx, R2[j].bottom + 2], bend = Math.sign(d) * 2 * depth;
+    g.curve(...arc, { bend, color: COL.faint, lw: 2, dash: [6, 8] });                      // frame 0: the wiring is already there, faint
+    g.curve(...arc, { bend, color: key ? COL.acc : g.rgba(COL.acc, .45), lw: 2 + 30 * H_ATT[j], k }); });
+  g.tokens(H_WORDS, cx, y2, { ...o, style: j => {
+    const me = j === H_ITS, hit = (j === H_LAW || j === H_APP) && k > .85;
+    return { alpha: .45 + .55 * on, stroke: me || hit ? COL.acc : COL.faint, lw: me || hit ? 4 : 2, fill: me ? g.rgba(COL.acc, .1 + .2 * on) : hit ? g.rgba(COL.acc, .25) : COL.panel };
+  } });
 }

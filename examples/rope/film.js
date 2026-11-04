@@ -46,9 +46,73 @@ const ROW = i => 300 + i * 104;
 const SH = [2, 4, 5, 0, 1, 3];              // 打乱后每个词去哪一行（向上的、向下的各自保持先后，不会穿过彼此）
 const SCORE = [0.9, 2.6, 0.4, 1.1, 3.0];    // Embedding 给前 5 个词的分数（示意）
 
+// 片头主图：表盘上「猫」「狗」两根箭头 + 下面一排位置格。两个词一起往后挪，每挪一格各转 HT 度，夹角（= 分数）不变。
+const HT = 20, HC = -20, HD = 0;            // 示意：每个位置转 20°；猫、狗本来的方向
+function heroRope(g, b) {
+  const { t, COL } = g;
+  const s = Math.min(1, b.h / 640), fz = v => Math.max(24, Math.round(v * s));
+  const tA = g.qAt('分不清词序'), tS = g.qAt('分数'), tD = g.qAt('只看两个词隔多远');
+  const step = g.p(0, .6, 'io') + g.p(tS, .6, 'io');              // 第 0 秒挪第一格，念到「分数」挪第二格
+  const m = 1 + step, n = 4 + step, ca = HC + HT * m, da = HD + HT * n;
+  // 版面：上面表盘（左）+ 词序对比（右），下面一排位置格
+  const rH = Math.max(96, b.h * .24), R = Math.min((b.h - rH) / 2 - 28 * s, b.w * .26);
+  const cx = b.x + R + 70 * s, cy = b.y + (b.h - rH) / 2;
+  arc(g, cx, cy, R, 0, 360, { color: COL.faint, lw: 2, dash: [6, 10] });
+  g.line(cx - R - 16, cy, cx + R + 16, cy, { color: COL.faint, lw: 2 });
+  g.line(cx, cy + R + 16, cx, cy - R - 16, { color: COL.faint, lw: 2 });
+  // 走过的位置留一根淡箭头：每个位置一个方向
+  for (let k = 1; k <= 2; k++) if (step >= k - .02) {
+    vecArrow(g, cx, cy, R * .92, HC + HT * k, COL.acc, { alpha: .22, lw: 4, head: 14 });
+    vecArrow(g, cx, cy, R * .8, HD + HT * (3 + k), COL.blue, { alpha: .22, lw: 4, head: 14 });
+  }
+  // 夹角：始终亮着，跟着两根箭头一起转，大小不变；念到「隔多远」变成黄色
+  const hot = g.p(tD + .1, .4);
+  arc(g, cx, cy, R * .42, ca, da, { color: mix(COL.sub, COL.yellow, hot), lw: 6 });
+  g.text(`夹角 ${HD - HC + 3 * HT}°`, ...at(cx, cy, R * .42 + 46 * s, (ca + da) / 2), { size: fz(30), font: 'disp', color: mix(COL.sub, COL.yellow, hot) });
+  const pc = vecArrow(g, cx, cy, R * .92, ca, COL.acc, { lw: Math.max(5, 8 * s), head: Math.max(16, 26 * s) });
+  const pd = vecArrow(g, cx, cy, R * .8, da, COL.blue, { lw: Math.max(5, 8 * s), head: Math.max(16, 26 * s) });
+  g.chip('猫', ...at(cx, cy, R * .92 + 40 * s, ca), { size: fz(32), solid: true });
+  g.chip('狗', ...at(cx, cy, R * .8 + 40 * s, da), { size: fz(32), color: COL.blue, solid: true });
+  // 分数：两个词怎么挪都是这个数（cos 80° ≈ 0.17，示意）
+  const sy = cy + R * .5;
+  g.text('分数 0.17', cx, sy, { size: fz(36), font: 'disp', weight: 700, color: COL.fg, alpha: .45 + .55 * g.p(tS - .3, .4) });
+  g.note('角度和分数：示意', cx + R + 16 * s, cy + R, { size: fz(22), alpha: .8 });
+  g.text('挪一格：没变', cx, sy + 44 * s, { size: fz(26), color: COL.green, alpha: g.p(tS + .7, .4) });
+  // 右边：不加位置时，「猫追狗」和「狗追猫」分数一样
+  const rx = b.x + b.w - 150 * Math.max(.8, s), la = .3 + .7 * g.p(tA, .4), dimq = 1 - .45 * g.p(tS - .2, .5);
+  const th = fz(30), ry = [cy - R * .45, cy - R * .45 + th * 3];
+  [['猫', '追', '狗'], ['狗', '追', '猫']].forEach((w, r) => {
+    g.tokens(w, rx, ry[r], { size: fz(30), style: i => ({ alpha: la * dimq, fill: w[i] === '猫' ? g.rgba(COL.acc, .22) : w[i] === '狗' ? g.rgba(COL.blue, .22) : COL.panel, stroke: w[i] === '猫' ? COL.acc : w[i] === '狗' ? COL.blue : COL.faint, lw: 2 }) });
+  });
+  g.text('=', rx, (ry[0] + ry[1]) / 2 + th * .875, { size: fz(40), weight: 800, font: 'disp', color: COL.red, alpha: g.p(tA + .3, .4) * dimq });
+  g.text('词序反了，分数一样 ✗', rx, ry[1] + th * 2.5, { size: fz(26), color: COL.red, alpha: g.p(tA + .5, .4) * dimq });
+  // 下面：一排位置格 0–8，猫、狗住在自己的格子里，一起往后挪
+  const N = 9, sw = b.w / N, gy = b.y + b.h - rH * .42, bh = Math.min(rH * .5, 64);
+  const sx = i => b.x + sw * (i + .5);
+  for (let i = 0; i < N; i++) {
+    g.rect(sx(i) - sw / 2 + 5, gy - bh / 2, sw - 10, bh, { r: 10, fill: COL.panel, stroke: COL.faint, lw: 2 });
+    g.text(String(i), sx(i), gy + bh / 2 + 22 * Math.max(.8, s), { size: fz(24), font: 'disp', color: COL.dim });
+  }
+  g.chip('猫', sx(1) + sw * step, gy, { size: fz(30), solid: true });
+  g.chip('狗', sx(4) + sw * step, gy, { size: fz(30), color: COL.blue, solid: true });
+  // 念到「只看两个词隔多远」：两格之间画一道括号，标「隔 3 个词」
+  const kb = g.p(tD + .1, .6, 'io'), by = gy - bh / 2 - 12 * s, x0 = sx(1) + sw * step, x1 = sx(4) + sw * step;
+  if (kb > 0) {
+    g.path([[x0, by + 4], [x0, by - 14 * s], [x1, by - 14 * s], [x1, by + 4]], { color: COL.yellow, lw: 4, k: kb });
+    g.chip('隔 3 个词', (x0 + x1) / 2, by - 14 * s, { size: fz(28), color: COL.yellow, solid: true, alpha: g.p(tD + .4, .4) });
+  }
+}
+
 PM.film({
-  paper: { title: 'RoFormer: Enhanced Transformer with Rotary Position Embedding', byline: 'Su 等 6 位作者 · 追一科技 · 2021', arxiv: '2104.09864' },
+  paper: { title: 'RoPE', full: 'RoFormer: Enhanced Transformer with Rotary Position Embedding', byline: 'Su 等 6 位作者 · 追一科技 · 2021', arxiv: '2104.09864' },
   question: '注意力**分不清词序**，怎样让分数只看两个词隔多远？',
+  opening: {
+    source: '追一科技 2021',
+    badges: ['追一科技', '2021'],
+    why: '中文长文本匹配，输入放长到 1024，准确率 **69.79%**，四个模型里最高；它也已经集成进 Huggingface',
+    points: ['长文本 **69.79%** 最高', '翻译 BLEU **27.5**', '已进 Huggingface'],
+    hero: heroRope,
+  },
   pronounce: { 'RoFormer': 'Roformer', '−': '减' },             // 配音念法：RoFormer 不逐字母念，m − n 念「m 减 n」
   recap: [
     '注意力本身**分不清顺序**，位置要另外塞进去',

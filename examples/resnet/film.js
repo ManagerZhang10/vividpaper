@@ -27,6 +27,59 @@ function barVec(g, cx, base, vals, color, o = {}) {
   g.line(x0 - 10, base, x0 + 4 * bw + 3 * gap + 10, base, { color: g.COL.faint, lw: 3, alpha: o.alpha ?? 1 });
   return { x0, x1: x0 + 4 * bw + 3 * gap, bar: i => [x0 + i * (bw + gap), bw] };
 }
+// Training-error curves of the paper's Figure 1 (left, CIFAR-10 plain nets), read off the figure's pixels:
+// "iterations (1e4), error %". The 56-layer curve starts at 1.9 because the paper's axis is cut at 20 %.
+const FIG1 = s => s.split(' ').map(p => p.split(',').map(Number));
+const C56 = FIG1('1.90,19.9 1.96,18.9 2.02,19.1 2.08,19.3 2.15,18.6 2.21,18.6 2.27,18.7 2.33,17.4 2.39,17.4 2.45,19.3 2.51,18.4 2.57,16.6 2.63,16.4 2.69,17.1 2.76,18.4 2.82,17.9 2.88,17.1 2.94,16.9 3.00,16.7 3.06,16.7 3.12,17.8 3.18,17.1 3.24,12.7 3.31,10.9 3.37,10.1 3.43,10.3 3.49,10.2 3.55,9.7 3.61,9.3 3.67,9.1 3.73,9.1 3.79,8.8 3.85,8.5 3.92,8.3 3.98,8.5 4.04,9.2 4.10,8.9 4.16,8.4 4.22,8.1 4.28,8.1 4.34,8.3 4.40,8.4 4.46,8.4 4.53,8.4 4.59,8.2 4.65,7.8 4.71,7.9 4.77,7.7 4.83,6.9 4.89,6.2 4.95,5.7 5.01,5.9 5.07,6.1 5.14,6.2 5.20,5.8 5.26,5.6 5.32,5.6 5.38,5.8 5.44,5.9 5.50,6.1 5.56,6.2 5.62,6.5 5.68,6.1 5.75,5.6 5.81,5.7 5.87,5.9 5.93,6.1 5.99,5.6 6.05,5.2 6.11,5.2 6.17,5.5 6.23,5.8 6.29,5.9');
+const C20 = FIG1('0.38,19.7 0.44,18.4 0.50,17.2 0.56,17.1 0.62,17.0 0.68,16.9 0.74,16.1 0.80,15.4 0.86,14.9 0.93,14.1 0.99,13.4 1.05,13.9 1.11,13.8 1.17,13.4 1.23,13.0 1.29,12.7 1.35,12.4 1.41,12.0 1.47,11.6 1.54,12.1 1.60,12.6 1.66,12.7 1.72,12.0 1.78,11.2 1.84,10.8 1.90,10.6 1.96,10.7 2.02,10.2 2.08,9.6 2.15,9.6 2.21,9.8 2.27,10.1 2.33,10.4 2.39,10.5 2.45,10.4 2.51,10.4 2.57,10.4 2.63,9.7 2.69,9.6 2.76,9.9 2.82,9.6 2.88,9.4 2.94,9.9 3.00,9.6 3.06,8.8 3.12,9.1 3.18,8.3 3.24,5.1 3.31,4.0 3.37,3.7 3.43,3.7 3.49,3.6 3.55,3.4 3.61,3.4 3.67,3.3 3.73,3.0 3.79,2.9 3.85,3.0 3.92,2.8 3.98,2.5 4.04,2.3 4.10,2.4 4.16,2.7 4.22,2.8 4.28,2.6 4.34,2.2 4.40,2.3 4.46,2.4 4.53,2.6 4.59,2.5 4.65,2.3 4.71,2.2 4.77,2.0 4.83,1.6 4.89,1.4 4.95,1.3 5.01,1.6 5.07,1.7 5.14,1.5 5.20,1.4 5.26,1.3 5.32,1.3 5.38,1.3 5.44,1.3 5.50,1.2 5.56,1.2 5.62,1.2 5.68,1.2 5.75,1.3 5.81,1.4 5.87,1.5 5.93,1.7 5.99,1.6 6.05,1.5 6.11,1.2 6.17,1.2 6.23,1.3 6.29,1.4');
+// the curve up to iteration xr (cut exactly at xr), and its value at x
+const upTo = (c, xr) => { const out = c.filter(p => p[0] <= xr), j = out.length; if (j && j < c.length) { const [a, b] = [c[j - 1], c[j]], u = (xr - a[0]) / (b[0] - a[0]); out.push([xr, a[1] + (b[1] - a[1]) * u]); } return out; };
+const valAt = (c, x) => { const j = c.findIndex(p => p[0] >= x); if (j <= 0) return c[Math.max(0, j)][1]; const [a, b] = [c[j - 1], c[j]]; return a[1] + (b[1] - a[1]) * (x - a[0]) / (b[0] - a[0]); };
+
+// opening hero: the degradation itself. A row of layers grows from 20 to 56 while both training curves of Figure 1 are drawn;
+// the 56-layer one ends up higher, and the gap between them is the question's 「越训越差」.
+function heroDegrade(g, box) {
+  const { COL, t } = g, { x: bx, y: by, w: bw, h: bh } = box;
+  const tDeep = g.qAt('越堆越深'), tWorse = g.qAt('越训越差');
+  // layer row: 20 yellow bars (the 20-layer net), then 36 more laid out faint, lit red one by one at 「越堆越深」
+  const rowH = g.clamp(bh * .085, 34, 60), rowY = by + 46, rowX = bx + 170, step = (bw - 180) / 56;
+  const grow = g.p(tDeep, 1.1, 'lin'), lit = Math.round(36 * grow);
+  layerRow(g, 56, rowX, rowY, { w: step * .62, gap: step * .38, h: rowH, color: i => i < 20 ? COL.yellow : i < 20 + lit ? COL.red : g.rgba(COL.sub, .22) });
+  const n = 20 + lit;
+  g.text(`${n} 层`, bx + 150, rowY + rowH / 2, { size: 40, font: 'disp', align: 'right', color: n > 20 ? COL.red : COL.yellow });
+  g.text('越堆越深 →', rowX + 20 * step + 4, by + 18, { size: 26, align: 'left', color: COL.red, alpha: .3 + .7 * g.p(tDeep, .4) });
+  // the chart: training error % against iterations, both curves being drawn from frame 0
+  const top = rowY + rowH + 54, px0 = bx + 74, px1 = bx + bw - 118, py0 = top + 12, py1 = by + bh - 42;
+  const X = v => px0 + (px1 - px0) * v / 6.4, Y = e => py1 - (py1 - py0) * Math.min(e, 20) / 20;
+  g.line(px0, py0 - 6, px0, py1, { color: COL.faint, lw: 2 }); g.line(px0, py1, px1 + 10, py1, { color: COL.faint, lw: 2 });
+  [0, 10, 20].forEach(e => g.text(String(e), px0 - 14, Y(e), { size: 24, align: 'right', font: 'disp', color: COL.dim }));
+  g.text('训练误差 %', px0 - 10, top - 26, { size: 26, align: 'left', color: COL.sub });
+  g.text('训练轮数 →', px1 + 10, py1 + 24, { size: 24, align: 'right', color: COL.dim });
+  g.note('数据：论文 Figure 1 左（CIFAR-10）', bx + bw, top - 26);
+  const xr = g.lerp(2.3, 6.29, g.p(0, tWorse + .3, 'lin'));     // already a quarter drawn at frame 0, done just after 「越训越差」
+  const P = c => c.map(([a, e]) => [X(a), Y(e)]);
+  g.path(P(C20), { color: COL.yellow, lw: 3, alpha: .16 }); g.path(P(C56), { color: COL.red, lw: 3, alpha: .16 });   // where they are headed, faint
+  // the gap between the two curves turns red at 「越训越差」
+  const ga = g.p(tWorse + .2, .5);
+  if (ga > 0) {
+    const xs = C56.map(p => p[0]).filter(v => v <= xr);
+    g.poly([...xs.map(v => [X(v), Y(valAt(C56, v))]), ...xs.slice().reverse().map(v => [X(v), Y(valAt(C20, v))])], { fill: g.rgba(COL.red, .26 * ga) });
+  }
+  const c20 = upTo(C20, xr), c56 = upTo(C56, xr);
+  g.path(P(c20), { color: COL.yellow, lw: 5 }); g.path(P(c56), { color: COL.red, lw: 5 });
+  const h20 = c20[c20.length - 1], h56 = c56[c56.length - 1];
+  g.circle(X(h20[0]), Y(h20[1]), 8, { fill: COL.yellow }); g.circle(X(h56[0]), Y(h56[1]), 8, { fill: COL.red });
+  // the labels ride on the pen tips
+  g.text('20 层', X(h20[0]) + 16, Y(h20[1]) - 20, { size: 30, font: 'disp', align: 'left', color: COL.yellow });
+  g.text('56 层', X(h56[0]) + 16, Y(h56[1]) - 22, { size: 30, font: 'disp', align: 'left', color: COL.red });
+  // 「越训越差」: a bracket between the two curve ends, named right in the gap
+  const ka = g.p(tWorse + .3, .5), ex = X(6.29) + 4, ya = Y(h56[1]), yb = Y(h20[1]);
+  if (ka > 0) {
+    g.line(ex, yb, ex, g.lerp(yb, ya, ka), { color: COL.red, lw: 4 });
+    g.chip('越训越差', X(4.1), (Y(valAt(C56, 4.1)) + Y(valAt(C20, 4.1))) / 2, { size: g.clamp(bh * .05, 26, 36), color: COL.red, solid: true, alpha: g.p(tWorse + .5, .4) });
+  }
+}
+
 // cubic Bézier point
 function bez(p0, p1, p2, p3, u) {
   const v = 1 - u;
@@ -42,8 +95,15 @@ function callout(g, rect, label, cx, cy, o = {}) {
 }
 
 PM.film({
-  paper: { title: 'Deep Residual Learning for Image Recognition', byline: 'Kaiming He 等 4 位作者 · Microsoft Research · 2015', arxiv: '1512.03385' },
-  question: '网络越堆越深，为什么反而**越训越差**？',
+  paper: { title: 'ResNet', full: 'Deep Residual Learning for Image Recognition', byline: 'Kaiming He 等 4 位作者 · Microsoft Research · 2015', arxiv: '1512.03385' },
+  question: '何恺明发现：网络越堆越深，为什么反而**越训越差**？',
+  opening: {
+    source: '微软研究院何恺明团队 CVPR 2016',
+    badges: ['微软研究院', '何恺明', 'CVPR 2016'],
+    why: '152 层，比 VGG 深 8 倍，计算量还更少；ImageNet 错误率 **3.57%**，ILSVRC 和 COCO 2015 一共拿下 **5** 项第一',
+    points: ['152 层，深 8 倍', '错误率 **3.57%**', '2015 拿下 **5** 项第一'],
+    hero: heroDegrade,
+  },
   recap: [
     '层数加深，**训练误差**反而升高：退化',
     '多出的层只要照抄就行，可它们学不会照抄',
