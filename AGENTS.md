@@ -14,7 +14,7 @@
 
 ## 规则
 
-1. **署名不可去掉。** 引擎在片头、每帧右上角、片尾和页面标题里画「张指导出品」。改引擎或播放器时保留这些位置，不加开关去掉它。
+1. **署名不可去掉。** 引擎在片头、片尾和页面标题里画「张指导出品」；每帧右上角（含 `introDraw` 主图片头）和播放器右上角宣传工具名「VividPaper」（`tool: false` 的片子不显示工具名，右上角改回「张指导出品」）。改引擎或播放器时保留这些位置，不加开关去掉它们。
 2. 改了 `engine/` 或 `scripts/` 后，把 `examples/` 下每个 demo 重新 build + check 一遍，全部零问题再提交：
    ```bash
    for d in examples/*/; do n=$(basename $d); python3 skills/vividpaper/scripts/build.py $d -o $d$n.html && python3 skills/vividpaper/scripts/check.py $d$n.html; done

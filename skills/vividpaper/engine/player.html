@@ -5,8 +5,8 @@
 <title>__TITLE__</title>
 <meta name="generator" content="VividPaper · 张指导出品">
 <style>
-:root{--bg:#070709;--fg:#F4F3EF;--dim:#8A8A92;--line:#26262C;--acc:#FF6A2C;
-  --w:min(calc((100vh - 150px)*3/4),calc(100vw - 32px));--h:calc(var(--w)*4/3)}
+:root{--bg:#070709;--fg:#F4F3EF;--dim:#8A8A92;--line:#26262C;--acc:#FF6A2C;--ar:.75;   /* width/height; pm.js sets 9/16 for layout: 'portrait' */
+  --w:min(calc((100vh - 150px)*var(--ar)),calc(100vw - 32px));--h:calc(var(--w)/var(--ar))}
 *{box-sizing:border-box}
 html,body{margin:0;background:var(--bg);color:var(--fg);font:14px -apple-system,"PingFang SC","Microsoft YaHei",sans-serif}
 #app{display:flex;flex-direction:column;align-items:center;gap:12px;padding:16px;min-height:100vh}
@@ -34,16 +34,16 @@ button.on{border-color:var(--acc);color:var(--acc)}
 @media (max-width:480px){.spd{padding:6px 7px}#pm-time{display:none}}
 /* wide screens: chapters move to a side column so the picture can be as tall as the window */
 @media (min-width:1000px) and (min-aspect-ratio:1/1){
-  :root{--w:min(calc((100vh - 110px)*3/4),calc(100vw - 420px))}
+  :root{--w:min(calc((100vh - 110px)*var(--ar)),calc(100vw - 420px))}
   #app{flex-direction:row;justify-content:center;align-items:flex-start;gap:24px}
   #side{width:340px;padding-top:34px}#pm-chaps{flex-direction:column}.chap{padding:9px 12px;font-size:14px}
 }
 body.still #app{padding:0;display:block}body.still #side,body.still #top,body.still #ctrl{display:none}
-body.still #stage{width:1080px;height:1440px}body.still canvas{border-radius:0}body.still #pm-big{display:none}
+body.still #stage{width:1080px;height:calc(1080px/var(--ar))}body.still canvas{border-radius:0}body.still #pm-big{display:none}
 </style></head><body>
 <div id="app">
  <div id="main">
-  <div id="top"><span id="pm-title"></span><b>张指导出品</b></div>
+  <div id="top"><span id="pm-title"></span><b>VividPaper</b></div>
   <div id="stage"><canvas id="pm" width="1080" height="1440"></canvas><button id="pm-big" aria-label="播放">▶</button></div>
   <div id="ctrl">
     <button id="pm-play" aria-label="播放/暂停">▶</button>

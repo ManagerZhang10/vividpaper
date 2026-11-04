@@ -3,7 +3,15 @@
 // No CSS animation and no real clock inside draw(); that is what makes seeking, 4× and the self-check work.
 'use strict';
 const PM = (() => {
-  const W = 1080, H = 1440;
+  // two layouts. Default: the 3:4 web page. portrait: a native 9:16 video frame where everything visible stays inside the
+  // short-video safe area x 80–1000, y 250–1480 (player UI covers the rest); film.js picks it with layout: 'portrait'
+  const LAYOUTS = {
+    card: { W: 1080, H: 1440, ZONE: { top: 130, bottom: 1190, cap: 1300 }, safe: [20, 16, 1060, 1424], capX: [30, 1050], capW: [940, 960],
+      head: [56, 72, 700], dy: 0 },
+    portrait: { W: 1080, H: 1920, ZONE: { top: 350, bottom: 1310, cap: 1392 }, safe: [80, 250, 1000, 1480], capX: [80, 1000], capW: [860, 870],
+      head: [80, 300, 600], dy: 160 },
+  };
+  let LY = LAYOUTS.card, W = LY.W, H = LY.H, ZONE = LY.ZONE;   // content lives between ZONE.top and ZONE.bottom; captions below
   const BRAND = '张指导出品', TOOL = 'VividPaper', SLOGAN = '3 分钟看懂一篇论文';
   const COL = {
     bg: '#0B0B0E', panel: '#15151A', fg: '#F4F3EF', sub: '#C9C9CF', dim: '#8A8A92', faint: '#3A3A42', line: '#26262C',
@@ -15,7 +23,6 @@ const PM = (() => {
     mono: (s, w) => `${w} ${s}px ui-monospace,"SF Mono",Menlo,Consolas,monospace`,
     disp: (s, w) => `${w} ${s}px -apple-system,"SF Pro Display","Helvetica Neue",Arial,${CN}`,
   };
-  const ZONE = { top: 130, bottom: 1190, cap: 1300 };   // content lives between top and bottom; captions below
 
   // ---------- math ----------
   const clamp = (v, a = 0, b = 1) => Math.min(b, Math.max(a, v));
@@ -30,6 +37,13 @@ const PM = (() => {
   const prog = (t, a, d, e = 'out') => E[e](clamp((t - a) / Math.max(d, 1e-6)));
   const win = (t, a, b, fi = .3, fo = .3) => (t < a || t > b) ? 0 : Math.min(E.out(clamp((t - a) / fi)), 1 - E.in(clamp((t - (b - fo)) / fo)));
   function rgba(hex, a) { const n = parseInt(hex.slice(1), 16); return `rgba(${n >> 16},${(n >> 8) & 255},${n & 255},${a})`; }
+  // how far a colour stands out from the background, 0–255 per channel at most (the measure video-studio safe.py uses)
+  function standout(c, a = 1) {
+    const rgb = s => { let m; if (/^#[0-9a-f]{6}$/i.test(s)) { const n = parseInt(s.slice(1), 16); return [n >> 16, (n >> 8) & 255, n & 255, 1]; }
+      if ((m = /rgba?\(([^)]+)\)/.exec(s))) { const v = m[1].split(',').map(Number); return [v[0], v[1], v[2], v[3] ?? 1]; } return null; };
+    const v = rgb(String(c)), bg = rgb(COL.bg); if (!v) return 255 * a;
+    return Math.max(...[0, 1, 2].map(i => Math.abs(v[i] - bg[i]))) * v[3] * a;
+  }
 
   let C, X, FILM = null, TL = null, LOG = null;
   const IMG = {}, CACHE = {};
@@ -59,14 +73,34 @@ const PM = (() => {
       .replace(/ {2,}/g, ' ').trim();
   }
   const clipOf = s => (window.PM_VOICE && window.PM_VOICE.clips[s]) || null;
+  // the opening template says three things, in this order: the question → 「今天解读<source>的论文 <title>」→ why it is worth reading
+  function openingLines(f) {
+    const op = f.opening, out = [], one = q => ({ text: txt(q), say: spoken(f, q) });
+    if (f.question) out.push(one(f.question));
+    if (op.source) {
+      const src = String(op.source).trim(), sp = c => /[A-Za-z0-9)]/.test(c) ? ' ' : '';
+      out.push(one(`今天解读${sp(src[0])}${src}${sp(src[src.length - 1])}的论文 **${(f.paper || {}).title || ''}**`));
+    }
+    if (op.why) out.push(one(op.why));
+    return out;
+  }
   function timeline(f) {
     const voice = [];   // every piece of narration in order: { sc, t (scene-local start), say, clip }
-    // intro: the whole spoken opening, said verbatim (e.g. who wrote it and what it answers); otherwise the default lead-in + question
-    const qSay = f.intro ? f.intro.trim() : f.question ? '这篇论文回答一个问题：' + spoken(f, f.question) : '', qc = clipOf(qSay);
-    const sc = [{ id: 'intro', name: '片头', builtin: 'intro', lines: [], dur: qc ? Math.max(3.6, 1.0 + qc.end + 0.8) : 3.6 }];
-    if (qSay) voice.push({ sc: sc[0], t: 1.0, say: qSay, clip: qc });
-    // whatever is said in the intro and outro also gets captions (silent films stay as they are)
-    if (qc) sc[0].lines = chunks(f.intro ? f.intro.trim() : '这篇论文回答一个问题：' + txt(f.question), 1.0, qc.end + .3);
+    // intro: the spoken opening — a string said verbatim, or several pieces (string or { text, say }) said one after another;
+    // without it, the default lead-in + question
+    const sc = [{ id: 'intro', name: '片头', builtin: 'intro', lines: [], segs: [], dur: 3.6 }];
+    const intros = f.intro ? [].concat(f.intro).map(o => typeof o === 'string' ? { text: o.trim(), say: o.trim() } : { text: o.text ?? o.say, say: spoken(f, o) })
+      : f.opening ? openingLines(f)
+      : f.question ? [{ text: '这篇论文回答一个问题：' + txt(f.question), say: '这篇论文回答一个问题：' + spoken(f, f.question) }] : [];
+    let ui = 1.0;
+    intros.forEach(o => {
+      const c = clipOf(o.say); voice.push({ sc: sc[0], t: ui, say: o.say, clip: c });
+      // whatever is said in the intro and outro also gets captions; silent films keep the plain title card,
+      // unless introDraw needs the pieces timed (then they run as long as reading them takes)
+      const d = c ? c.end + GAP : (f.introDraw || f.opening) ? lineDur(o.text) : null; if (d == null) return;
+      sc[0].lines.push(...chunks(o.text, ui, d - .1)); sc[0].segs.push({ t0: ui, t1: ui + d });
+      sc[0].dur = Math.max(3.6, ui + d + .4); ui += d;
+    });
     f.scenes.forEach((s, i) => {
       const lines = [], scene = { ...s, num: i + 1, lines }; let u = s.lead ?? 0.5;
       (s.lines || []).forEach(l => {
@@ -86,7 +120,13 @@ const PM = (() => {
       const say = spoken(f, r), c = clipOf(say), d = Math.max(1.7, c ? c.end + GAP : 0);
       recapT.push(u); voice.push({ sc: null, t: u, say, clip: c }); if (c) olines.push(...chunks(txt(r), u, d)); u += d;
     });
-    const outro = { id: 'outro', name: '回顾', builtin: 'outro', lines: olines, recapT, dur: u + .6 + 3.2 }; sc.push(outro);
+    // ending: a spoken sign-off after the recap; the credit comes up as it starts
+    let endT = null;
+    if (f.ending) {
+      const say = spoken(f, f.ending), c = clipOf(say); endT = u + .3;
+      voice.push({ sc: null, t: endT, say, clip: c }); if (c) { olines.push(...chunks(txt(f.ending), endT, c.end + GAP)); u = endT + c.end + GAP; }
+    }
+    const outro = { id: 'outro', name: '回顾', builtin: 'outro', lines: olines, recapT, endT, dur: u + .6 + (endT == null ? 3.2 : 1.4) }; sc.push(outro);
     voice.forEach(v => { v.sc = v.sc || outro; });
     let t = 0; sc.forEach(s => { s.t0 = t; t += s.dur; });
     voice.forEach(v => { v.t += v.sc.t0; });
@@ -131,7 +171,7 @@ const PM = (() => {
     return { x: x0, y: y - size / 2, w: tw, h: size };
   }
 
-  // ---------- drawing helpers (all coordinates are absolute on the 1080×1440 stage) ----------
+  // ---------- drawing helpers (all coordinates are absolute on the W×H stage) ----------
   const D = {
     text(s, x, y, o = {}) { return rich(spans(s, o.color ?? COL.fg, o.hl ?? COL.acc), x, y, o); },
     rich,
@@ -141,7 +181,8 @@ const PM = (() => {
         if (o.fill) { X.fillStyle = o.fill; X.fill(); }
         if (o.stroke) { X.strokeStyle = o.stroke; X.lineWidth = o.lw ?? 3; X.setLineDash(o.dash || []); X.stroke(); X.setLineDash([]); }
       });
-      if ((o.alpha ?? 1) > 0.05) log('rect', x, y, x + w, y + h);
+      const sp = o.stroke ? (o.lw ?? 3) / 2 : 0, a = X.globalAlpha * (o.alpha ?? 1);
+      if ((o.alpha ?? 1) > 0.05) log('rect', x - sp, y - sp, x + w + sp, y + h + sp, { sp, vs: o.stroke ? standout(o.stroke, a) : 0, vf: o.fill ? standout(o.fill, a) : 0 });
       return { x, y, w, h };
     },
     circle(x, y, r, o = {}) {
@@ -180,6 +221,9 @@ const PM = (() => {
           X.lineTo(b[0] - hs * Math.cos(ang - .45), b[1] - hs * Math.sin(ang - .45)); X.lineTo(b[0] - hs * Math.cos(ang + .45), b[1] - hs * Math.sin(ang + .45)); X.closePath(); X.fill();
         }
       });
+      const sp = Math.max((o.lw ?? 4) / 2, o.head ? o.head * .45 : 0);
+      if ((o.alpha ?? 1) > 0.05) log('line', Math.min(...out.map(p => p[0])) - sp, Math.min(...out.map(p => p[1])) - sp, Math.max(...out.map(p => p[0])) + sp, Math.max(...out.map(p => p[1])) + sp,
+        { sp, vs: standout(o.color ?? COL.sub, X.globalAlpha * (o.alpha ?? 1)), vf: 0 });
     },
     // a figure from figures/; h omitted → keep aspect. card: true puts it on a white card (paper figures are drawn for white).
     img(name, x, y, w, h, o = {}) {
@@ -334,18 +378,19 @@ const PM = (() => {
   };
 
   // ---------- chrome: header, captions, brand ----------
-  function brandMark(x, y, size, a = 1, align = 'right') {
-    X.font = FONT.cn(size, 700); const tw = X.measureText(BRAND).width, sq = size * .62;
+  function brandMark(x, y, size, a = 1, align = 'right', label = BRAND) {
+    X.font = FONT.cn(size, 700); const tw = X.measureText(label).width, sq = size * .62;
     const x0 = align === 'right' ? x - tw - sq - 12 : align === 'center' ? x - (tw + sq + 12) / 2 : x;
     D.rect(x0, y - sq / 2, sq, sq, { r: sq * .28, fill: COL.acc, alpha: a });
-    rich([[BRAND, COL.fg]], x0 + sq + 12, y + 1, { size, weight: 700, align: 'left', alpha: a, kind: 'brand' });
+    rich([[label, COL.fg]], x0 + sq + 12, y + 1, { size, weight: 700, align: 'left', alpha: a, kind: 'brand' });
   }
   function header(sc, a) {
     if (sc.builtin) return;
-    D.chip(String(sc.num).padStart(2, '0'), 56, 72, { size: 26, align: 'left', alpha: a, kind: 'chrome' });
-    D.text(sc.name, 128, 72, { size: 30, align: 'left', color: COL.sub, alpha: a, kind: 'chrome', maxW: 700 });
+    const [hx, hy, hw] = LY.head;   // chapter number + name on the left, 张指导出品 on the right of the same row
+    D.chip(String(sc.num).padStart(2, '0'), hx, hy, { size: 26, align: 'left', alpha: a, kind: 'chrome' });
+    D.text(sc.name, hx + 72, hy, { size: 30, align: 'left', color: COL.sub, alpha: a, kind: 'chrome', maxW: hw });
   }
-  // wrap caption spans into ≤2 lines of ≤940 px; ASCII words never split, closing punctuation never starts a line
+  // wrap caption spans into ≤2 lines of ≤ maxW px; ASCII words never split, closing punctuation never starts a line
   function wrapCaption(parts, size, maxW) {
     X.font = FONT.cn(size, 600);
     const units = [];
@@ -366,8 +411,8 @@ const PM = (() => {
   function caption(sc, lt) {
     const l = sc.lines.find(l => lt >= l.t0 && lt < l.t1); if (!l) return;
     const a = Math.min(clamp((lt - l.t0) / .15), clamp((l.t1 - lt) / .12));
-    let size = 42, lines = wrapCaption(spans(l.text, COL.fg, COL.acc), size, 940);
-    if (lines.length > 2) { if (LOG) LOG.warn('字幕太长', `超过两行：「${l.text.replace(/\*\*/g, '')}」`); size = 36; lines = wrapCaption(spans(l.text, COL.fg, COL.acc), size, 960); }
+    let size = 42, lines = wrapCaption(spans(l.text, COL.fg, COL.acc), size, LY.capW[0]);
+    if (lines.length > 2) { if (LOG) LOG.warn('字幕太长', `超过两行：「${l.text.replace(/\*\*/g, '')}」`); size = 36; lines = wrapCaption(spans(l.text, COL.fg, COL.acc), size, LY.capW[1]); }
     const lh = size * 1.45, y0 = ZONE.cap - (lines.length - 1) * lh / 2;
     lines.forEach((ln, i) => rich(ln, W / 2, y0 + i * lh, { size, alpha: a, kind: 'caption' }));
   }
@@ -381,33 +426,86 @@ const PM = (() => {
   function wrapCN(s, size, maxW, base = COL.fg, hl = COL.acc) { return wrapCaption(spans(s, base, hl), size, maxW); }
   // tool: false (local films) drops the tool name and keeps the slogan; the 张指导出品 credit always stays
   const tag = () => FILM.tool === false ? SLOGAN : `${TOOL} · ${SLOGAN}`;
-  function intro(t) {
-    const p = FILM.paper || {}, a0 = prog(t, 0, .7);
-    brandMark(80, 140, 40, prog(t, .2, .6), 'left');
-    D.text(tag(), 80, 214, { size: 28, align: 'left', color: COL.dim, alpha: .5 + .5 * a0 });
+  // top-right corner of every frame advertises the tool; local films keep the credit
+  const corner = () => brandMark(W - LY.head[0], LY.head[1], 26, .9, 'right', FILM.tool === false ? BRAND : TOOL);
+  function intro(t, sc) {
+    if (FILM.opening) return openingPic(t, sc);
+    if (FILM.introDraw) return introPic(t, sc);
+    const p = FILM.paper || {}, a0 = prog(t, 0, .7), dy = LY.dy;   // both layouts are 1080 wide; portrait moves everything down by dy
+    brandMark(80, 140 + dy, 40, prog(t, .2, .6), 'left');
+    D.text(tag(), 80, 214 + dy, { size: 28, align: 'left', color: COL.dim, alpha: .5 + .5 * a0 });
     const tl = wrapWords(p.title || '', 84, 920);
-    tl.forEach((s, i) => D.text(s, 80, 360 + i * 104 + (1 - a0) * 30, { size: 84, weight: 800, font: 'disp', align: 'left', alpha: .35 + .65 * a0 }));
-    const yb = 360 + tl.length * 104;
+    tl.forEach((s, i) => D.text(s, 80, 360 + dy + i * 104 + (1 - a0) * 30, { size: 84, weight: 800, font: 'disp', align: 'left', alpha: .35 + .65 * a0 }));
+    const yb = 360 + dy + tl.length * 104;
     D.line(80, yb - 10, 80 + 300 * prog(t, .3, 1.2, 'io'), yb - 10, { color: COL.acc, lw: 8 });
     D.text(p.byline || '', 80, yb + 50, { size: 32, align: 'left', color: COL.sub, alpha: prog(t, .4, .6) });
     const q = prog(t, 1.0, .7);
     D.text('这篇论文回答一个问题', 80, yb + 200, { size: 32, align: 'left', color: COL.dim, alpha: q });
     wrapCN(txt(FILM.question || ''), 56, 920, COL.acc, COL.fg).forEach((ln, i) => rich(ln, 80, yb + 285 + i * 80 + (1 - q) * 24, { size: 56, weight: 700, align: 'left', alpha: q }));
   }
+  // intro with a picture (film.js introDraw(g)): the title starts big, then within the first second shrinks into a header
+  // at the top and introDraw owns the rest of the frame; g.p(.45, .8, 'io') is the same shrink, so the picture can move with it
+  function introPic(t, sc) {
+    const p = FILM.paper || {}, k = prog(t, .45, .8, 'io'), dy = LY.dy;
+    const tl = wrapWords(p.title || '', 64, 920), sz = lerp(64, 30, k), lh = sz * 1.22, y0 = lerp(270 + dy, 170 + dy, k);
+    tl.forEach((s, i) => D.text(s, 80, y0 + i * lh, { size: sz, weight: 800, font: 'disp', align: 'left', color: k > .5 ? COL.sub : COL.fg }));
+    const yb = y0 + tl.length * lh;
+    D.line(80, yb - 6, 80 + 240 * prog(t, .1, .4), yb - 6, { color: COL.acc, lw: 6, alpha: 1 - k });
+    D.text(p.byline || '', 80, yb + lerp(36, 10, k), { size: lerp(30, 22, k), align: 'left', color: COL.sub });
+    corner();
+    FILM.introDraw(G(sc, t));
+  }
+  // the opening template (film.js opening: {...}). Frame 0 is the cover: title, byline, the question as a headline and
+  // opening.hero(g, box) underneath. Within the first second the title shrinks into a header and everything moves up;
+  // the source badges come up while 「今天解读…」 is said, the reasons to read it while the third piece is said.
+  function openingPic(t, sc) {
+    const op = FILM.opening, p = FILM.paper || {}, k = prog(t, .45, .8, 'io'), dy = LY.dy, g = G(sc, t);
+    const tl = wrapWords(p.title || '', 64, 920), sz = lerp(64, 30, k), lh = sz * 1.22, y0 = lerp(270 + dy, 170 + dy, k);
+    tl.forEach((s, i) => D.text(s, 80, y0 + i * lh, { size: sz, weight: 800, font: 'disp', align: 'left', color: k > .5 ? COL.sub : COL.fg }));
+    const yb = y0 + tl.length * lh, by = yb + lerp(36, 10, k);
+    D.line(80, yb - 6, 80 + 240 * prog(t, .1, .4), yb - 6, { color: COL.acc, lw: 6, alpha: 1 - k });
+    D.text(p.byline || '', 80, by, { size: lerp(30, 22, k), align: 'left', color: COL.sub });
+    // the question, word for word what is said first
+    const QS = 50, QLH = 68, ql = FILM.question ? wrapCN(txt(FILM.question), QS, 880, COL.fg, COL.acc) : [];   // measured at 600, drawn at 700: leave room
+    const qy = by + lerp(96, 84, k);
+    ql.forEach((ln, i) => rich(ln, 80, qy + i * QLH, { size: QS, weight: 700, align: 'left' }));
+    // the rows at the bottom, and the box the hero gets: from under the question down to above the badges (as laid out once the title has shrunk)
+    const yBadge = ZONE.bottom - 240, yPoint = ZONE.bottom - 135;
+    const qEnd = n => (n ? (n - 1) * QLH + QS / 2 : -60) + 52;
+    const top = qy + qEnd(ql.length), top1 = 170 + dy + tl.length * 30 * 1.22 + 10 + 84 + qEnd(ql.length);
+    const box = { x: 84, y: top, w: 912, h: Math.max(120, yBadge - 70 - top1) };   // inset so a stroke round the hero stays inside the safe area
+    corner();
+    if (op.hero) op.hero(g, box);
+    // which spoken piece is which: question, source, why (in that order, whichever of them exist)
+    let n = 0; const iQ = FILM.question ? n++ : -1, iS = op.source ? n++ : -1, iW = op.why ? n++ : -1;
+    const at = i => sc.segs[i] ? sc.segs[i].t0 : null, end = i => sc.segs[i] ? sc.segs[i].t1 : null;
+    const row = (items, y, size, style) => {   // a centred row of chips, shrunk to fit 920 px
+      if (!items.length) return;
+      const ws = s => { X.font = FONT.cn(size, 600); return spans(s).reduce((a, q) => a + X.measureText(q[0]).width, 0) + size * 1.1; };
+      let w = items.reduce((a, s) => a + ws(s), 0) + 24 * (items.length - 1);
+      if (w > 920) { size = Math.max(22, Math.floor(size * 920 / w)); w = items.reduce((a, s) => a + ws(s), 0) + 24 * (items.length - 1); }
+      let x = W / 2 - w / 2;
+      items.forEach((s, j) => { const st = style(j); if (st.alpha > 0) D.chip(s, x, y, { size, align: 'left', ...st }); x += ws(s) + 24; });
+    };
+    const badges = op.badges || (op.source ? [op.source] : []), tS = at(iS);
+    if (tS != null) row(badges, yBadge, 34, j => ({ color: j === badges.length - 1 ? COL.acc : COL.blue, solid: j === badges.length - 1, alpha: prog(t, tS + .5 + j * .8, .4) }));
+    const pts = op.points || [], tW = at(iW), tW1 = end(iW), PC = [COL.blue, COL.green, COL.acc2, COL.purple, COL.yellow];
+    if (tW != null) row(pts, yPoint, 28, j => ({ color: PC[j % PC.length], alpha: prog(t, lerp(tW, tW1, .02 + .9 * j / Math.max(1, pts.length)), .4) }));
+  }
   function outro(t, sc) {
-    const r = FILM.recap || [];
-    D.text('最后回顾', 80, 220, { size: 34, align: 'left', color: COL.dim, alpha: prog(t, 0, .5) });
+    const r = FILM.recap || [], dy = LY.dy * .75;
+    D.text('最后回顾', 80, 220 + dy, { size: 34, align: 'left', color: COL.dim, alpha: prog(t, 0, .5) });
     r.forEach((q, i) => {
-      const s = txt(q), a = prog(t, sc.recapT[i], .6), y = 330 + i * 170;
+      const s = txt(q), a = prog(t, sc.recapT[i], .6), y = 330 + dy + i * 170;
       D.circle(110, y, 30, { fill: COL.acc, alpha: a });
       D.text(String(i + 1), 110, y + 1, { size: 32, weight: 800, font: 'disp', color: '#111', alpha: a });
       const ls = wrapCN(s, 40, 840);
       ls.forEach((ln, j) => rich(ln, 170, y + j * 56 - (ls.length - 1) * 28, { size: 40, align: 'left', alpha: a }));
     });
-    const b = prog(t, sc.dur - 3.0, .7);
-    D.line(80, 970, 80 + 920 * b, 970, { color: COL.faint, lw: 2 });
-    brandMark(W / 2, 1050, 56, b, 'center');
-    D.text(tag(), W / 2, 1125, { size: 30, color: COL.dim, alpha: b });
+    const b = prog(t, sc.endT ?? sc.dur - 3.0, .7);
+    D.line(80, 970 + dy, 80 + 920 * b, 970 + dy, { color: COL.faint, lw: 2 });
+    brandMark(W / 2, 1050 + dy, 56, b, 'center');
+    D.text(tag(), W / 2, 1125 + dy, { size: 30, color: COL.dim, alpha: b });
   }
 
   // ---------- one frame ----------
@@ -419,7 +517,7 @@ const PM = (() => {
     const fade = (sc.id === 'intro' ? 1 : clamp(lt / .35)) * clamp((sc.dur - lt) / .3);
     X.save(); X.globalAlpha = fade;
     try {
-      if (sc.builtin === 'intro') intro(lt);
+      if (sc.builtin === 'intro') intro(lt, sc);
       else if (sc.builtin === 'outro') outro(lt, sc);
       else { header(sc, 1); sc.draw(G(sc, lt)); }
     } catch (e) {
@@ -429,11 +527,12 @@ const PM = (() => {
     X.restore();
     if (SNAP) SNAP(sc, lt);
     caption(sc, lt);
-    if (!sc.builtin) brandMark(W - 56, 72, 26, .9);
+    if (!sc.builtin) corner();
   }
   function G(sc, t) {
-    const L = i => { if (!sc.lines[i]) throw new Error(`L(${i}) 超出「${sc.id}」的字幕条数 ${sc.lines.length}`); return sc.lines[i].t0; };
-    const Le = i => { L(i); return sc.lines[i].t1; };
+    const ls = sc.segs || sc.lines;   // in introDraw, i counts spoken intro pieces, not caption chunks
+    const L = i => { if (!ls[i]) throw new Error(`L(${i}) 超出「${sc.id}」的${sc.segs ? '开场白段数' : '字幕条数'} ${ls.length}`); return ls[i].t0; };
+    const Le = i => { L(i); return ls[i].t1; };
     return { ...D, t, dur: sc.dur, W, H, COL, E, ZONE, ctx: X, clamp, lerp, rgba, L, Le,
       p: (a, d = .5, e = 'out') => prog(t, a, d, e), win: (a, b, fi, fo) => win(t, a, b, fi, fo) };
   }
@@ -449,7 +548,10 @@ const PM = (() => {
   // ---------- voice track ----------
   // All clips mixed into one track at their places on the timeline, so a single <audio> can seek, run at 2× and be unlocked by one tap.
   async function voiceTrack() {
-    const items = TL.voice.filter(v => v.clip); if (!items.length) return null;
+    const items = TL.voice.filter(v => v.clip);
+    // an exporter may hand in one pre-mixed track (e.g. voice + music, the same mix as its video): play that instead
+    if (window.PM_TRACK) return { url: URL.createObjectURL(await (await fetch(window.PM_TRACK)).blob()), clips: items.length, seconds: TL.total };
+    if (!items.length) return null;
     const rate = 24000, ac = new OfflineAudioContext(1, 1, rate), out = new Float32Array(Math.ceil(TL.total * rate));
     for (const v of items) {
       const bytes = Uint8Array.from(atob(v.clip.src.split(',')[1]), c => c.charCodeAt(0));
@@ -471,8 +573,8 @@ const PM = (() => {
     LOG = { items: [], warn };
     // content-only thumbnails (captured before captions are drawn) to tell whether the picture moves
     // 1/10 scale; "moved" = at least 6 thumbnail pixels changed visibly, so a label fading in counts, codec-level noise does not
-    const small = document.createElement('canvas'); small.width = 108; small.height = 144; const sx = small.getContext('2d', { willReadFrequently: true });
-    let grab = null; SNAP = () => { sx.drawImage(C, 0, 0, 108, 144); grab = sx.getImageData(0, 0, 108, 144).data; };
+    const tw = W / 10, th = H / 10, small = document.createElement('canvas'); small.width = tw; small.height = th; const sx = small.getContext('2d', { willReadFrequently: true });
+    let grab = null; SNAP = () => { sx.drawImage(C, 0, 0, tw, th); grab = sx.getImageData(0, 0, tw, th).data; };
     const thumb = t => { render(t); return grab; };
     const diff = (p, d) => { let n = 0; for (let i = 0; i < d.length; i += 4) if (Math.abs(d[i] - p[i]) + Math.abs(d[i + 1] - p[i + 1]) + Math.abs(d[i + 2] - p[i + 2]) > 36) n++; return n >= 6 ? 1 : 0; };
     TL.scenes.filter(s => !s.builtin).forEach(sc => {
@@ -488,13 +590,26 @@ const PM = (() => {
     });
     SNAP = null;
     const ov = {};
+    const edge = FILM.layout === 'portrait' ? '超出安全区' : '超出画面', [sx0, sy0, sx1, sy1] = LY.safe;
     for (let t = 0; t < TL.total; t += .25) {
       cur.t = t; const sc = sceneAt(t); cur.sc = sc.id; LOG.items = []; const nowOv = new Set();
       render(t);
       const capOn = sc.lines.some(l => t - sc.t0 >= l.t0 && t - sc.t0 < l.t1);
       for (const it of LOG.items) {
-        if (it.kind === 'rect' || it.kind === 'caption') { if (it.kind === 'caption' && (it.x0 < 30 || it.x1 > W - 30)) warn('出界', '字幕超出画面'); continue; }
-        if (it.x0 < 20 || it.x1 > W - 20 || it.y0 < 16 || it.y1 > H - 16) warn('出界', `${it.kind}「${(it.s || '').slice(0, 16)}」超出画面`);
+        if (it.kind === 'caption') { if (it.x0 < LY.capX[0] || it.x1 > LY.capX[1]) warn('出界', '字幕' + edge); continue; }
+        // boxes and lines (stroke included), judged the way video-studio safe.py sees them: it scales the frame down 4× and flags
+        // a band once enough of it differs from the background by > 48 — about 60 px along a side edge, 140 px along the top,
+        // 240 px along the bottom. So a 1.5 px orange stroke down a tall box counts; a short one, a faint panel edge or a round
+        // line cap poking out does not
+        if (it.kind === 'rect' || it.kind === 'line') {
+          if (FILM.layout !== 'portrait') continue;
+          const h = it.y1 - it.y0, w = it.x1 - it.x0;
+          const over = Math.max(h >= 60 ? Math.max(sx0 - it.x0, it.x1 - sx1) : 0, w >= 140 ? sy0 - it.y0 : 0, w >= 240 ? it.y1 - sy1 : 0);
+          const vis = over > it.sp ? Math.max(it.vs, it.vf) : it.vs;
+          if (over > 1 && vis * Math.min(1, over / 4) > 48) warn('出界', `${it.kind === 'rect' ? '方框' : '线条'}伸出安全区约 ${Math.round(over)} px（描边算在内）`);
+          continue;
+        }
+        if (it.x0 < sx0 || it.x1 > sx1 || it.y0 < sy0 || it.y1 > sy1) warn('出界', `${it.kind}「${(it.s || '').slice(0, 16)}」${edge}`);
         if (it.size && it.size < (it.kind === 'note' ? 20 : 22)) warn('字太小', `「${(it.s || '').slice(0, 16)}」只有 ${it.size}px`);
         if (capOn && !sc.builtin && it.kind !== 'brand' && it.kind !== 'chrome' && it.y1 > ZONE.bottom + 20) warn('压字幕', `${it.kind}「${(it.s || '').slice(0, 12)}」伸进字幕区（y>${ZONE.bottom}）`);
       }
@@ -525,7 +640,7 @@ const PM = (() => {
       else if (sc.builtin === 'outro') shots.push([sc.t0 + sc.dur - .4, '回顾']);
       else sc.lines.forEach((l, i) => shots.push([sc.t0 + l.t1 - .25, `${String(sc.num).padStart(2, '0')}·${i + 1}`]));
     });
-    const cw = +(q.get('cell') || 270), ch = cw * 4 / 3, cols = +(q.get('cols') || 6), rows = Math.ceil(shots.length / cols);
+    const cw = +(q.get('cell') || 270), ch = cw * H / W, cols = +(q.get('cols') || 6), rows = Math.ceil(shots.length / cols);
     const sheet = document.createElement('canvas'); sheet.width = cols * cw; sheet.height = rows * (ch + 34); const S = sheet.getContext('2d');
     S.fillStyle = '#000'; S.fillRect(0, 0, sheet.width, sheet.height);
     shots.forEach(([t, lab], i) => {
@@ -603,7 +718,8 @@ const PM = (() => {
   }
 
   async function boot() {
-    C = document.getElementById('pm'); X = C.getContext('2d');
+    C = document.getElementById('pm'); C.width = W; C.height = H; X = C.getContext('2d');
+    document.documentElement.style.setProperty('--ar', W / H);   // player.html sizes the stage from this
     if (!FILM) throw new Error('film.js 里没有调用 PM.film({...})');
     await loadAssets(); TL = timeline(FILM);
     const q = new URLSearchParams(location.search);
@@ -619,5 +735,13 @@ const PM = (() => {
     player(track);
   }
 
-  return { render: t => render(t), timeline: () => TL, film: f => { FILM = f; const ft = f.tool === false && document.getElementById('foot'); if (ft && ft.firstChild) ft.firstChild.nodeValue = BRAND; }, boot, W, H, COL };
+  function film(f) {
+    if (f.layout != null && f.layout !== 'portrait') throw new Error(`layout 只能不写（3:4）或写 'portrait'（9:16），不认识「${f.layout}」`);
+    FILM = f; LY = LAYOUTS[f.layout || 'card']; ({ W, H, ZONE } = LY);
+    if (f.tool === false) {   // no tool name anywhere on the page: the corner and the footer show the credit instead
+      const ft = document.getElementById('foot'), tp = document.querySelector('#top b');
+      if (ft && ft.firstChild) ft.firstChild.nodeValue = BRAND; if (tp) tp.textContent = BRAND;
+    }
+  }
+  return { render: t => render(t), timeline: () => TL, film, boot, get W() { return W; }, get H() { return H; }, COL };
 })();
