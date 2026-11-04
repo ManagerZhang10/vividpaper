@@ -14,8 +14,7 @@ const PM = (() => {
   let LY = LAYOUTS.card, W = LY.W, H = LY.H, ZONE = LY.ZONE;   // content lives between ZONE.top and ZONE.bottom; captions below
   // credits. The end card of every film says it was made with the tool and shows a 「★ Star | repo」 badge, with no option to
   // turn it off; film.js `brand` only sets the name in the top-right corner of every frame and on the default title card
-  // (old films wrote tool: false for OWN)
-  const TOOL = 'VividPaper', REPO = 'ManagerZhang10/vividpaper', SLOGAN = '3 分钟看懂一篇论文', OWN = '张指导出品';
+  const TOOL = 'VividPaper', REPO = 'ManagerZhang10/vividpaper', SLOGAN = '3 分钟看懂一篇论文';
   let BRAND = TOOL;
   const COL = {
     bg: '#0B0B0E', panel: '#15151A', fg: '#F4F3EF', sub: '#C9C9CF', dim: '#8A8A92', faint: '#3A3A42', line: '#26262C',
@@ -96,7 +95,7 @@ const PM = (() => {
     const intros = f.intro ? [].concat(f.intro).map(o => typeof o === 'string' ? { text: o.trim(), say: o.trim() } : { text: o.text ?? o.say, say: spoken(f, o) })
       : f.opening ? openingLines(f)
       : f.question ? [{ text: '这篇论文回答一个问题：' + txt(f.question), say: '这篇论文回答一个问题：' + spoken(f, f.question) }] : [];
-    let ui = 1.0;
+    let ui = 0;   // the first word is said, and captioned, on frame 0
     intros.forEach(o => {
       const c = clipOf(o.say); voice.push({ sc: sc[0], t: ui, say: o.say, clip: c });
       // whatever is said in the intro and outro also gets captions; silent films keep the plain title card,
@@ -413,11 +412,14 @@ const PM = (() => {
       }
       lines[lines.length - 1].push(u); w += uw;
     });
+    // never leave one lone character (plus trailing punctuation) on the last line: pull the previous unit down with it
+    const last = lines[lines.length - 1], prev = lines[lines.length - 2], solo = l => l.map(q => q[0]).join('').replace(/[，。、：；！？）」』”,.!?:;)\]\s]/g, '');
+    if (prev && prev.length > 1 && Array.from(solo(last)).length === 1) last.unshift(prev.pop());
     return lines.map(l => { const m = []; l.forEach(([s, c]) => { if (m.length && m[m.length - 1][1] === c) m[m.length - 1][0] += s; else m.push([s, c]); }); if (m.length) m[m.length - 1][0] = m[m.length - 1][0].trimEnd(); return m; });
   }
   function caption(sc, lt) {
     const l = sc.lines.find(l => lt >= l.t0 && lt < l.t1); if (!l) return;
-    const a = Math.min(clamp((lt - l.t0) / .15), clamp((l.t1 - lt) / .12));
+    const a = Math.min(l.t0 <= 0 ? 1 : clamp((lt - l.t0) / .15), clamp((l.t1 - lt) / .12));   // a caption that starts the film is on frame 0
     let size = 42, lines = wrapCaption(spans(l.text, COL.fg, COL.acc), size, LY.capW[0]);
     if (lines.length > 2) { if (LOG) LOG.warn('字幕太长', `超过两行：「${l.text.replace(/\*\*/g, '')}」`); size = 36; lines = wrapCaption(spans(l.text, COL.fg, COL.acc), size, LY.capW[1]); }
     const lh = size * 1.45, y0 = ZONE.cap - (lines.length - 1) * lh / 2;
@@ -444,7 +446,7 @@ const PM = (() => {
     const yb = 360 + dy + tl.length * 104;
     D.line(80, yb - 10, 80 + 300 * prog(t, .3, 1.2, 'io'), yb - 10, { color: COL.acc, lw: 8 });
     D.text(p.byline || '', 80, yb + 50, { size: 32, align: 'left', color: COL.sub, alpha: prog(t, .4, .6) });
-    const q = prog(t, 1.0, .7);
+    const q = prog(t, .3, .7);
     D.text('这篇论文回答一个问题', 80, yb + 200, { size: 32, align: 'left', color: COL.dim, alpha: q });
     wrapCN(txt(FILM.question || ''), 56, 920, COL.acc, COL.fg).forEach((ln, i) => rich(ln, 80, yb + 285 + i * 80 + (1 - q) * 24, { size: 56, weight: 700, align: 'left', alpha: q }));
   }
@@ -460,25 +462,32 @@ const PM = (() => {
     corner();
     FILM.introDraw(G(sc, t));
   }
-  // the opening template (film.js opening: {...}). Frame 0 is the cover: title, byline, the question as a headline and
-  // opening.hero(g, box) underneath. Within the first second the title shrinks into a header and everything moves up;
-  // the source badges come up while 「今天解读…」 is said, the reasons to read it while the third piece is said.
+  // the opening template (film.js opening: {...}). Frame 0 already speaks and moves: the layout is final from the start
+  // (method name and byline as a small header, the question as a big headline, opening.hero(g, box) underneath), and the
+  // headline lights up word by word as it is said, from 0 s. The source badges come up while 「今天解读…」 is said, the
+  // reasons to read it while the third piece is said.
+  let OPEN_BOX = null;   // the hero box, for the self-check
   function openingPic(t, sc) {
-    const op = FILM.opening, p = FILM.paper || {}, k = prog(t, .45, .8, 'io'), dy = LY.dy, g = G(sc, t);
-    const tl = wrapWords(p.title || '', 64, 920), sz = lerp(64, 30, k), lh = sz * 1.22, y0 = lerp(270 + dy, 170 + dy, k);
-    tl.forEach((s, i) => D.text(s, 80, y0 + i * lh, { size: sz, weight: 800, font: 'disp', align: 'left', color: k > .5 ? COL.sub : COL.fg }));
-    const yb = y0 + tl.length * lh, by = yb + lerp(36, 10, k);
-    D.line(80, yb - 6, 80 + 240 * prog(t, .1, .4), yb - 6, { color: COL.acc, lw: 6, alpha: 1 - k });
-    D.text(p.byline || '', 80, by, { size: lerp(30, 22, k), align: 'left', color: COL.sub });
-    // the question, word for word what is said first
-    const QS = 50, QLH = 68, ql = FILM.question ? wrapCN(txt(FILM.question), QS, 880, COL.fg, COL.acc) : [];   // measured at 600, drawn at 700: leave room
-    const qy = by + lerp(96, 84, k);
-    ql.forEach((ln, i) => rich(ln, 80, qy + i * QLH, { size: QS, weight: 700, align: 'left' }));
-    // the rows at the bottom, and the box the hero gets: from under the question down to above the badges (as laid out once the title has shrunk)
+    const op = FILM.opening, p = FILM.paper || {}, dy = LY.dy, g = G(sc, t);
+    const tl = wrapWords(p.title || '', 30, 920), lh = 30 * 1.22, y0 = 170 + dy;
+    tl.forEach((s, i) => D.text(s, 80, y0 + i * lh, { size: 30, weight: 800, font: 'disp', align: 'left', color: COL.sub }));
+    const by = y0 + tl.length * lh + 10;
+    D.text(p.byline || '', 80, by, { size: 22, align: 'left', color: COL.sub });
+    // the question, word for word what is said first; dim until said, each character lights up as the voice reaches it
+    const QS = 56, QLH = 76, ql = FILM.question ? wrapCN(txt(FILM.question), QS, 880, COL.fg, COL.acc) : [];   // measured at 600, drawn at 700: leave room
+    const qy = by + 90, s0 = sc.segs[0], nQ = ql.reduce((a, ln) => a + ln.reduce((b, q) => b + Array.from(q[0]).length, 0), 0);
+    let lit = s0 ? Math.round(nQ * prog(t, s0.t0, Math.max(.5, (s0.t1 - s0.t0 - GAP) * .95), 'lin')) : nQ;
+    ql.forEach((ln, i) => {
+      const parts = [];
+      ln.forEach(([str, c]) => { const ch = Array.from(str), k = clamp(lit, 0, ch.length); lit -= ch.length;
+        if (k) parts.push([ch.slice(0, k).join(''), c]); if (k < ch.length) parts.push([ch.slice(k).join(''), COL.dim]); });
+      rich(parts, 80, qy + i * QLH, { size: QS, weight: 700, align: 'left' });
+    });
+    // the rows at the bottom, and the box the hero gets: from under the question down to above the badges
     const yBadge = ZONE.bottom - 240, yPoint = ZONE.bottom - 135;
-    const qEnd = n => (n ? (n - 1) * QLH + QS / 2 : -60) + 52;
-    const top = qy + qEnd(ql.length), top1 = 170 + dy + tl.length * 30 * 1.22 + 10 + 84 + qEnd(ql.length);
-    const box = { x: 84, y: top, w: 912, h: Math.max(120, yBadge - 70 - top1) };   // inset so a stroke round the hero stays inside the safe area
+    const top = qy + (ql.length ? (ql.length - 1) * QLH + QS / 2 : -60) + 52;
+    const box = { x: 84, y: top, w: 912, h: Math.max(120, yBadge - 70 - top) };   // inset so a stroke round the hero stays inside the safe area
+    OPEN_BOX = box;
     corner();
     if (op.hero) op.hero(g, box);
     // which spoken piece is which: question, source, why (in that order, whichever of them exist)
@@ -599,6 +608,16 @@ const PM = (() => {
     let grab = null; SNAP = () => { sx.drawImage(C, 0, 0, tw, th); grab = sx.getImageData(0, 0, tw, th).data; };
     const thumb = t => { render(t); return grab; };
     const diff = (p, d) => { let n = 0; for (let i = 0; i < d.length; i += 4) if (Math.abs(d[i] - p[i]) + Math.abs(d[i + 1] - p[i + 1]) + Math.abs(d[i + 2] - p[i + 2]) > 36) n++; return n >= 6 ? 1 : 0; };
+    // the opening has to move from frame 0: the hero (the only part film.js draws) must change within the first 0.6 s
+    const intro0 = TL.scenes[0];
+    if (FILM.opening && FILM.opening.hero) {
+      cur.sc = 'intro'; cur.t = 0;
+      const a = thumb(intro0.t0), bx = OPEN_BOX, b = thumb(intro0.t0 + .6);
+      const x0 = Math.max(0, Math.floor(bx.x / 10)), x1 = Math.min(tw, Math.ceil((bx.x + bx.w) / 10)), y0 = Math.max(0, Math.floor(bx.y / 10)), y1 = Math.min(th, Math.ceil((bx.y + bx.h) / 10));
+      let n = 0;
+      for (let y = y0; y < y1; y++) for (let x = x0; x < x1; x++) { const i = (y * tw + x) * 4; if (Math.abs(a[i] - b[i]) + Math.abs(a[i + 1] - b[i + 1]) + Math.abs(a[i + 2] - b[i + 2]) > 36) n++; }
+      if (n < 6) warn('开场不动', 'opening.hero 在 0–0.6 秒没有动：主图要从第 0 秒就开始动（例如 g.p(0, .4) 打 ✗、线在画）');
+    }
     TL.scenes.filter(s => !s.builtin).forEach(sc => {
       cur.sc = sc.id;
       sc.lines.forEach((l, i) => { cur.t = sc.t0 + l.t0; if (!diff(thumb(sc.t0 + l.t0 + .25), thumb(sc.t0 + l.t1 - .1))) warn('这句画面不动', `第 ${i + 1} 句「${l.text.replace(/\*\*/g, '').slice(0, 14)}…」从头到尾画面没变化`); });
@@ -745,9 +764,10 @@ const PM = (() => {
     C = document.getElementById('pm'); C.width = W; C.height = H; X = C.getContext('2d');
     document.documentElement.style.setProperty('--ar', W / H);   // player.html sizes the stage from this
     if (!FILM) throw new Error('film.js 里没有调用 PM.film({...})');
-    const b = FILM.brand;   // tool: false is the old way of writing brand: OWN
-    if (b != null && !(typeof b === 'string' && b.trim())) throw new Error(`brand 要写成一段文字，例如 brand: '${OWN}'；不写就是「${TOOL}」`);
-    BRAND = b != null ? b.trim() : FILM.tool === false ? OWN : TOOL;
+    const b = FILM.brand;
+    if ('tool' in FILM) throw new Error(`tool 选项已去掉：右上角要写自己的名字就写 brand: '你的名字'；不写就是「${TOOL}」`);
+    if (b != null && !(typeof b === 'string' && b.trim())) throw new Error(`brand 要写成一段文字，例如 brand: '你的名字'；不写就是「${TOOL}」`);
+    BRAND = b != null ? b.trim() : TOOL;
     await loadAssets(); TL = timeline(FILM);
     const q = new URLSearchParams(location.search);
     if (q.has('script')) {   // voice.py: everything that will be read aloud, in order

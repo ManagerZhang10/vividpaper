@@ -8,7 +8,7 @@ Writes next to the html:
   _frames/<name>_t<sec>.png  full-size frames for --at (scratch, not part of the film)
   <name>_audit.json    timeline + warnings
 Prints the warnings. Exit code 1 when there are any, so you fix them before handing over.
-Kinds: 报错 / 出界 / 字太小 / 压字幕 / 文字重叠 / 字幕太长 / 这句画面不动 / 画面静止 / 总长 / 配音.
+Kinds: 报错 / 出界 / 字太小 / 压字幕 / 文字重叠 / 字幕太长 / 这句画面不动 / 画面静止 / 开场不动 / 总长 / 配音.
 """
 import argparse, base64, html, json, os, re, shutil, subprocess, sys
 from pathlib import Path
