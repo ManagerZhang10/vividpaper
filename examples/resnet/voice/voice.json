@@ -2,10 +2,10 @@
  "engine": "edge:zh-CN-YunxiNeural:+30%",
  "voice": "zh-CN-YunxiNeural",
  "clips": {
-  "网络越堆越深，为什么反而越训越差？": {
-   "file": "00ba84c0defb.mp3",
-   "dur": 2.952,
-   "end": 2.944
+  "何恺明发现：网络越堆越深，为什么反而越训越差？": {
+   "file": "9f18b5b02c76.mp3",
+   "dur": 3.984,
+   "end": 3.973
   },
   "今天解读微软研究院何恺明团队 CVPR 2016 的论文 ResNet": {
    "file": "be4ca62caeeb.mp3",

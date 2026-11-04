@@ -96,7 +96,7 @@ function callout(g, rect, label, cx, cy, o = {}) {
 
 PM.film({
   paper: { title: 'ResNet', full: 'Deep Residual Learning for Image Recognition', byline: 'Kaiming He 等 4 位作者 · Microsoft Research · 2015', arxiv: '1512.03385' },
-  question: '网络越堆越深，为什么反而**越训越差**？',
+  question: '何恺明发现：网络越堆越深，为什么反而**越训越差**？',
   opening: {
     source: '微软研究院何恺明团队 CVPR 2016',
     badges: ['微软研究院', '何恺明', 'CVPR 2016'],

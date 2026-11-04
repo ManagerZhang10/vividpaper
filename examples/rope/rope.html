@@ -467,6 +467,8 @@ const PM = (() => {
       if (w + uw > maxW && cur.length && !/^[，。、：；！？）」』”,.!?:;)\]]/.test(u[0])) {
         const carry = [];   // an opening bracket or quote moves down with the word it opens
         while (cur.length && /^[（「『“(\[]$/.test(cur[cur.length - 1][0])) carry.unshift(cur.pop());
+        // a comma or colon among the last few units is a better place to break than the middle of a word (为什 / 么)
+        if (!carry.length) { const k = cur.map(q => q[0]).findLastIndex((q, j) => j >= cur.length - 4 && j < cur.length - 1 && /^[，、：；]$/.test(q)); if (k > 0) carry.push(...cur.splice(k + 1)); }
         lines.push(carry); w = carry.reduce((a, q) => a + X.measureText(q[0]).width, 0);
       }
       lines[lines.length - 1].push(u); w += uw;
