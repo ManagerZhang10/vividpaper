@@ -14,11 +14,11 @@ const sentence = (g, y, style, o = {}) => g.tokens(WORDS, 540, y, { breaks: [7],
 PM.film({
   paper: { title: 'Attention Is All You Need', byline: 'Vaswani 等 8 位作者 · Google · NIPS 2017', arxiv: '1706.03762' },
   question: '翻译模型能不能**完全不用 RNN**，只靠注意力？',
-  recap: [
-    'RNN 一个词一个词传：慢，远处的词难联系',
-    '注意力：每个词**直接看**所有词，1 步可达、能并行',
-    'Q·K 打分 → softmax 变权重 → 按权重加起 V',
-    '多头 + 位置编码 + 编码器/解码器 = **Transformer**',
+  recap: [   // 每条一行（≤ 12 字），右边的小框画那一幕机制的简化版（函数在文件末尾）
+    { text: 'RNN 逐词传：**慢**、传不远', draw: recapRnn },
+    { text: '注意力：每个词**直接看**全句', draw: recapSelf },
+    { text: 'Q·K 打分，按权重**加起 V**', draw: recapQkv },
+    { text: '拼起来就是 **Transformer**', draw: recapArch },
   ],
   scenes: [
     {
@@ -322,3 +322,45 @@ PM.film({
     },
   ],
 });
+
+// ---------- 最后回顾的小动效：每条画那一幕机制的简化版，box = {x, y, w, h}，u(延迟, 时长, 缓动) 从这条出现时算起 ----------
+// ① RNN：记忆一格一格往后传，越传越淡
+function recapRnn(g, b, u) {
+  const n = 7, cy = b.y + 50, xs = Array.from({ length: n }, (_, j) => b.x + 34 + j * (b.w - 68) / (n - 1)), run = u(.2, 1.6, 'lin') * (n - 1);
+  for (let j = 0; j + 1 < n; j++) g.line(xs[j] + 12, cy, xs[j + 1] - 12, cy, { color: g.COL.faint, lw: 3 });
+  xs.forEach((x, j) => g.circle(x, cy, 11, { fill: run >= j - .05 ? g.rgba(g.COL.acc, .25) : g.COL.panel, stroke: run >= j - .05 ? g.COL.acc : g.COL.faint, lw: 3 }));
+  const i = Math.min(n - 2, Math.floor(run)), k = run - i, fade = run / (n - 1);
+  g.circle(g.lerp(xs[i], xs[i + 1], k), cy, 8 - 4 * fade, { fill: g.COL.acc, alpha: 1 - .6 * fade });
+  g.text('一步一步传', b.x + b.w / 2, b.y + 96, { size: 24, color: g.COL.dim, alpha: u(.4, .4) });
+}
+// ② 自注意力：its 同时连向所有词，连 Law、application 的两条最粗（权重同第 2 幕）
+function recapSelf(g, b, u) {
+  const c = 16, gap = 6, x0 = b.x + (b.w - (13 * (c + gap) - gap)) / 2, y = b.y + b.h - 34, cx = j => x0 + j * (c + gap) + c / 2, k = u(.3, .9, 'io');
+  ATT.forEach((w, j) => { if (j === ITS) return;
+    const d = cx(j) - cx(ITS), key = j === LAW || j === APP;
+    g.curve(cx(ITS), y, cx(j), y, { bend: (d < 0 ? 1 : -1) * (Math.abs(d) * .5 + 12), color: key ? g.COL.acc : g.rgba(g.COL.acc, .35 + w), lw: 1.5 + 12 * w, k }); });
+  for (let j = 0; j < 13; j++) g.rect(cx(j) - c / 2, y, c, c, { r: 4, fill: j === ITS ? g.COL.acc : g.COL.panel, stroke: j === ITS || ((j === LAW || j === APP) && k > .9) ? g.COL.acc : g.COL.faint, lw: 2 });
+}
+// ③ Q·K 打分成权重（橙条），各词的 V（绿格）按权重合成一个新表示
+function recapQkv(g, b, u) {
+  const W = [.05, .45, .05, .1, .05, .3], col = j => b.x + 24 + j * 28, merge = u(1.1, .7, 'io'), rx = b.x + b.w - 74;
+  W.forEach((w, j) => {
+    const h = 44 * w / .45 * u(.2 + j * .08, .4);
+    g.rect(col(j), b.y + 62 - Math.max(h, 3), 20, Math.max(h, 3), { r: 4, fill: j === 1 || j === 5 ? g.COL.acc : g.COL.faint });
+    g.rect(g.lerp(col(j), rx + 8, merge), b.y + 78, 20, 20, { r: 5, fill: g.rgba(g.COL.green, .25 + 1.6 * w), alpha: 1 - merge });
+  });
+  g.arrow(col(5) + 34, b.y + 88, rx - 14, b.y + 88, { color: g.COL.green, lw: 3, head: 10, k: u(.8, .4) });
+  g.rect(rx, b.y + 70, 36, 36, { r: 6, fill: g.COL.green, alpha: merge });
+  g.text('新表示', rx + 18, b.y + 36, { size: 24, color: g.COL.green, alpha: merge });
+}
+// ④ 编码器、解码器各叠几层，中间一条编码器-解码器注意力（颜色同第 6 幕的标框）
+function recapArch(g, b, u) {
+  const sw = 96, sh = 16, ex = b.x + 36, dx = b.x + b.w - 36 - sw, bot = b.y + b.h - 44;
+  for (let j = 0; j < 3; j++) {
+    g.rect(ex, bot - j * 22 - sh, sw, sh, { r: 4, fill: g.rgba(g.COL.acc, .3), stroke: g.COL.acc, lw: 2, alpha: u(.1 + j * .15, .3) });
+    g.rect(dx, bot - j * 22 - sh, sw, sh, { r: 4, fill: g.rgba(g.COL.blue, .3), stroke: g.COL.blue, lw: 2, alpha: u(.5 + j * .15, .3) });
+  }
+  g.text('编码器', ex + sw / 2, b.y + b.h - 22, { size: 24, color: g.COL.acc, alpha: u(.1, .4) });
+  g.text('解码器', dx + sw / 2, b.y + b.h - 22, { size: 24, color: g.COL.blue, alpha: u(.5, .4) });
+  g.curve(ex + sw + 6, bot - 2 * 22 - sh / 2, dx - 6, bot - 22 - sh / 2, { bend: -16, color: g.COL.purple, lw: 4, head: 12, k: u(1.1, .6, 'io') });
+}

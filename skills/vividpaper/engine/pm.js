@@ -492,15 +492,24 @@ const PM = (() => {
     const pts = op.points || [], tW = at(iW), tW1 = end(iW), PC = [COL.blue, COL.green, COL.acc2, COL.purple, COL.yellow];
     if (tW != null) row(pts, yPoint, 28, j => ({ color: PC[j % PC.length], alpha: prog(t, lerp(tW, tW1, .02 + .9 * j / Math.max(1, pts.length)), .4) }));
   }
+  // a recap item written as { text, draw(g, box, u) } gets a small panel to the right of its line with a moving sketch of
+  // its scene: 320×124 in 3:4 (300 wide in portrait, to stay inside the safe area), centred on the line
+  const recapBox = y => { const x = 690, x1 = Math.min(1010, LY.safe[2] - 10); return { x, y: y - 62, w: x1 - x, h: 124 }; };
   function outro(t, sc) {
-    const r = FILM.recap || [], dy = LY.dy * .75;
+    const r = FILM.recap || [], dy = LY.dy * .75; let g = null;
     D.text('最后回顾', 80, 220 + dy, { size: 34, align: 'left', color: COL.dim, alpha: prog(t, 0, .5) });
     r.forEach((q, i) => {
-      const s = txt(q), a = prog(t, sc.recapT[i], .6), y = 330 + dy + i * 170;
+      const s = txt(q), t0 = sc.recapT[i], a = prog(t, t0, .6), y = 330 + dy + i * 170;
+      const draw = typeof q === 'object' && typeof q.draw === 'function' ? q.draw : null, box = draw && recapBox(y);
       D.circle(110, y, 30, { fill: COL.acc, alpha: a });
       D.text(String(i + 1), 110, y + 1, { size: 32, weight: 800, font: 'disp', color: '#111', alpha: a });
-      const ls = wrapCN(s, 40, 840);
+      const ls = wrapCN(s, 40, box ? box.x - 24 - 170 : 840);   // with a panel the line stops short of it
       ls.forEach((ln, j) => rich(ln, 170, y + j * 56 - (ls.length - 1) * 28, { size: 40, align: 'left', alpha: a }));
+      if (!box || a <= .001) return;
+      // the panel fades in with its line; u(delay, len, ease) is g.p counted from the moment the line comes up
+      D.rect(box.x, box.y, box.w, box.h, { r: 14, fill: COL.panel, stroke: COL.faint, lw: 2, alpha: a });
+      g = g || G(sc, t); X.save(); X.globalAlpha *= a;
+      try { draw(g, { ...box }, (d = 0, len = .5, e = 'out') => prog(t, t0 + d, len, e)); } finally { X.restore(); }
     });
     const b = prog(t, sc.endT ?? sc.dur - 3.0, .7);
     D.line(80, 970 + dy, 80 + 920 * b, 970 + dy, { color: COL.faint, lw: 2 });
