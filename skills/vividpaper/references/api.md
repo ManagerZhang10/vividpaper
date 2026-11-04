@@ -57,13 +57,13 @@ draw(g) 必须是 t 的纯函数：不用 `Date.now()`、`Math.random()`（要�
 新片默认用这个片头。它分三句念完，前后大约 15 秒：
 
 1. 先念 `question`，画面上的大标题一字不差就是这句。
-2. 再念「今天解读<source>的论文 <paper.title>」。念这句时，`badges` 逐个弹出，最后一个用实心强调色。
+2. 再念「今天解读<source>的论文 <paper.title>」。念这句时，顶上的全称收成简称，`badges` 在简称正下方逐个弹出，最后一个用实心强调色。
 3. 最后念 `why`，讲这篇为什么值得读。念这句时，`points` 逐个弹出。
 
-**第 0 秒就开口、出字幕、画面在动**：片头配音从第 0 秒开始念，字幕同时出。第 0 帧就是最终版式，不再先放大标题再缩：顶上一行小字方法名和作者行，下面是问题大标题，再下面是 `hero` 主图。问题大标题先是灰的，跟着念到哪个字就点亮到哪个字。
+**第 0 秒就开口、出字幕、画面在动**：片头配音从第 0 秒开始念，字幕同时出。第 0 帧就是最终版式，不再先放大标题再缩：顶上是小字论文全称和作者行，下面是问题大标题，再下面是 `hero` 主图。问题大标题第 0 帧就整句亮着、不跟着念动（字幕已经跟着声音走，标题再逐字点亮就像第二条字幕）；动的是 `hero` 主图。
 
 ```js
-paper: { title: 'PromptEnhancer', byline: 'Linqing Wang 等 16 位作者 · 腾讯混元 · CVPR 2026', arxiv: '2509.04545' },
+paper: { title: 'PromptEnhancer', full: 'PromptEnhancer: A Simple Approach to Enhance Text-to-Image Models via Chain-of-Thought Prompt Rewriting', byline: 'Linqing Wang 等 16 位作者 · 腾讯混元 · CVPR 2026', arxiv: '2509.04545' },
 question: '不动生图模型，只训一个**改提示词**的模型，能让图画得更准吗？',
 opening: {
   source: '腾讯混元 CVPR 2026',                      // 第 2 句：今天解读腾讯混元 CVPR 2026 的论文 PromptEnhancer
@@ -71,18 +71,18 @@ opening: {
   why: '生图模型一个参数不改，整体准确率涨了 **5.1** 个点；混元生图 2.1 自带的改写模型就是它',   // 第 3 句：为什么值得读
   points: ['生图模型参数不改', '整体准确率 **+5.1**', '混元生图 2.1 自带'],   // 第 3 句时依次弹出，2–4 个、每个 ≤ 10 字
   hero(g, box) {                                     // 封面主图，画在 box = {x, y, w, h} 里
-    // 用 box.x / box.y / box.w / box.h 写坐标：第一句念的时候 box 一直放大到字幕上方，第二句开始时缩到徽章上方，图要跟着 box 缩放
+    // 用 box.x / box.y / box.w / box.h 写坐标：box 从问题下方一直到字幕上方，第三句（why）开始时缩到要点那一行上方，图要跟着 box 缩放
     // 第 0 秒就要开始动，动作挂在问题的关键词上：g.p(g.qAt('只靠注意力'), .6)
     // 换版式、整体淡入不算动；自查会比较主图第 0 秒和第 0.6 秒，没变化就报「开场不动」
   },
 },
 ```
 
-- `paper.title` 写方法名或简称。arXiv 全名太长，放在顶部会占好几行，全名放在 `story.md` 里。
+- `paper.full` 写论文全称，`paper.title` 写方法名或简称。第 0 帧顶上是小字全称；念到「今天解读…的论文 X」时，全称收成简称，`badges`（机构、会议）在简称正下方、全称原来的位置逐个弹出，作者行同时淡出（机构和会议已经在徽章上了）。不写 `full` 就一直只显示简称。
 - `why` 要写具体的东西：效果涨了多少、已经用在哪个产品里、开源了什么。不写「很重要」「很强」这种空话。数字要能在原文里找到。
 - `hero` 画这篇论文的核心内容：核心机制作用在一个具体例子上（例如噪声一步步洗成猫），或者一眼看得出差别的对比。怎么画见 craft.md 第 8 节。
-- `box` 的大小会变：第一句（问题）念的时候，`box` 从问题下方一直放大到字幕上方（3:4 约 912×700）；第二句开始时用 0.6 秒缩到徽章上方（约 912×420），给徽章和要点让位。图的尺寸都按 `box.w`、`box.h` 算，就会跟着缩。没写 `source` 和 `why` 时不缩。
-- `g.qAt('词')`：念到问题句里这个词的时刻（秒），和问题大字点亮到这个词是同一时刻。词要在 `question` 里原样出现（不含 `**`），找不到就报错。只能在片头里用。
+- `box` 的大小会变：前两句念的时候，`box` 从问题下方一直到字幕上方（3:4 约 912×650）；第三句（`why`）开始时用 0.6 秒缩到要点那一行上方，给 `points` 让位。图的尺寸都按 `box.w`、`box.h` 算，就会跟着缩。没写 `points` 时不缩。
+- `g.qAt('词')`：念到问题句里这个词的时刻（秒），按问题这一句匀速念估算。词要在 `question` 里原样出现（不含 `**`），找不到就报错。只能在片头里用。
 - 在 `hero` 里，`g.L(i)` / `g.Le(i)` 是第 i 句开场白的起止时刻。
 - 想换说法时自己写 `intro`，但要按「问题 → 出处 → 理由」的顺序写三段，`badges` 和 `points` 会按第 2、3 段出现。
 
@@ -158,7 +158,7 @@ recap: [
 | 　`leader` | 标签放到 `[x, y]`（图外的空地），虚线引回框；标签会盖住原图内容时用它 | |
 | `g.chip(s, x, y, o)` | 胶囊标签；返回矩形。**默认以 x 居中**，贴在图右边要写 `align:'left'` | `size color solid align alpha` |
 | `g.note(s, x, y, o)` | 小字出处，默认右对齐，如「图：论文 Figure 1」 | `size color align alpha` |
-| `g.tokens(words, cx, y, o)` | 一排词块，返回每个词的矩形（`cx cy top bottom`）方便连线 | `size font padX h gap maxW breaks:[换行处下标] rowGap draw:false style(i)→{alpha fill stroke color lw dx dy}` |
+| `g.tokens(words, cx, y, o)` | 一排词块（`y` 是词块**顶边**，不是中心），返回每个词的矩形（`cx cy top bottom`）方便连线 | `size font padX h gap maxW breaks:[换行处下标] rowGap draw:false style(i)→{alpha fill stroke color lw dx dy}` |
 | `g.vec(x, y, vals, o)` | 向量：一排小格，值 0–1 决定亮度 | `cell gap color dir('h'/'v') k alpha` |
 | `g.heat(x, y, M, o)` | 矩阵热图，返回 `cell(i,j)` 中心点 | `cell gap color rows cols labelSize rotateCols mask(i,j) hi:[[i,j]] hiColor text(i,j)`（格内数字）`textSize k alpha` |
 | `g.bars(x, y, w, items, o)` | 横向条形图，items `{label, value, text?, hi?, color?, alpha?}`，返回每根条的矩形。数值默认 `String(value)`（23.0 会显示成 23），要固定小数位就传 `text` | `title min max log k labelW valueW labelSize h gap alpha` |

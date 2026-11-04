@@ -29,13 +29,13 @@
 
 | 论文 | 一句话主线 | 在线看 | 时长 |
 | --- | --- | --- | --- |
-| Attention Is All You Need（2017） | 翻译模型能不能完全不用 RNN，只靠注意力？ | [▶ Transformer](https://managerzhang10.github.io/vividpaper/examples/attention/attention.html) | 2:48 |
-| Deep Residual Learning（2015） | 网络越堆越深，为什么反而越训越差？ | [▶ ResNet](https://managerzhang10.github.io/vividpaper/examples/resnet/resnet.html) | 3:23 |
-| An Image is Worth 16x16 Words（2020） | 图像能不能像句子一样，直接交给 Transformer？ | [▶ ViT](https://managerzhang10.github.io/vividpaper/examples/vit/vit.html) | 3:30 |
-| Denoising Diffusion Probabilistic Models（2020） | 怎么从纯噪声一步步「洗」出一张图？ | [▶ DDPM](https://managerzhang10.github.io/vividpaper/examples/ddpm/ddpm.html) | 3:17 |
-| Learning Transferable Visual Models（2021） | 不给人工标签，模型能不能光靠网上的图文配对学会认图？ | [▶ CLIP](https://managerzhang10.github.io/vividpaper/examples/clip/clip.html) | 3:36 |
-| RoFormer: Rotary Position Embedding（2021） | 注意力分不清词序，怎样让分数只看两个词隔多远？ | [▶ RoPE](https://managerzhang10.github.io/vividpaper/examples/rope/rope.html) | 3:48 |
-| Flow Matching for Generative Modeling（2022） | 一团噪声要流成数据，每一点该往哪走，怎么教给模型？ | [▶ Flow Matching](https://managerzhang10.github.io/vividpaper/examples/flow-matching/flow-matching.html) | 3:47 |
+| Attention Is All You Need（2017） | 翻译模型能不能完全不用 RNN，只靠注意力？ | [▶ Transformer](https://managerzhang10.github.io/vividpaper/examples/attention/attention.html) | 2:59 |
+| Deep Residual Learning（2015） | 网络越堆越深，为什么反而越训越差？ | [▶ ResNet](https://managerzhang10.github.io/vividpaper/examples/resnet/resnet.html) | 3:36 |
+| An Image is Worth 16x16 Words（2020） | 图像能不能像句子一样，直接交给 Transformer？ | [▶ ViT](https://managerzhang10.github.io/vividpaper/examples/vit/vit.html) | 3:40 |
+| Denoising Diffusion Probabilistic Models（2020） | 怎么从纯噪声一步步「洗」出一张图？ | [▶ DDPM](https://managerzhang10.github.io/vividpaper/examples/ddpm/ddpm.html) | 3:31 |
+| Learning Transferable Visual Models（2021） | 不给人工标签，模型能不能光靠网上的图文配对学会认图？ | [▶ CLIP](https://managerzhang10.github.io/vividpaper/examples/clip/clip.html) | 3:46 |
+| RoFormer: Rotary Position Embedding（2021） | 注意力分不清词序，怎样让分数只看两个词隔多远？ | [▶ RoPE](https://managerzhang10.github.io/vividpaper/examples/rope/rope.html) | 3:58 |
+| Flow Matching for Generative Modeling（2022） | 一团噪声要流成数据，每一点该往哪走，怎么教给模型？ | [▶ Flow Matching](https://managerzhang10.github.io/vividpaper/examples/flow-matching/flow-matching.html) | 3:58 |
 
 动图是每部片子核心一幕的 8–10 秒片段（动图没有声音）。打开后：空格播放/暂停，←/→ 跳 5 秒，1/2/4 切倍速，M 开关声音，右侧章节可以直接跳。想离线看就下载 `examples/<名字>/<名字>.html` 双击打开，单文件、配音也在里面，不联网也能放。
 

@@ -2,10 +2,20 @@
  "engine": "edge:zh-CN-YunxiNeural:+30%",
  "voice": "zh-CN-YunxiNeural",
  "clips": {
-  "这篇论文回答一个问题：图像能不能像句子一样，直接交给 Transformer？": {
-   "file": "40a1236b2ec7.mp3",
-   "dur": 4.872,
-   "end": 4.867
+  "图像能不能像句子一样，直接交给 Transformer？": {
+   "file": "de9c3e3621d2.mp3",
+   "dur": 3.408,
+   "end": 3.406
+  },
+  "今天解读 Google ICLR 2021 的论文 ViT": {
+   "file": "9937f929dba3.mp3",
+   "dur": 4.008,
+   "end": 4.002
+  },
+  "在 ImageNet 上拿到 88.55%，超过 CNN 强基线 BiT-L，预训练算力只要它的约四分之一": {
+   "file": "36b83a0424de.mp3",
+   "dur": 6.912,
+   "end": 6.896
   },
   "2020 年，Transformer 已经统治了 NLP：一句话切成一个个词，直接送进去": {
    "file": "5dfa54b9cd0e.mp3",

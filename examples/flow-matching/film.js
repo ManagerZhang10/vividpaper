@@ -144,9 +144,98 @@ function pathPanel(g, x, y, sz, fn, a, k, title, color, ticks) {
   return M;
 }
 
+// ---------- opening hero: a noise blob on the left flows to the checkerboard on the right ----------
+// Same physics as scene 1 (eq. 8 + eq. 21), only laid out sideways: p₀ = N(m, I) with m on the left, the board on the right.
+// For a shifted p₀ the conditional field (21) is unchanged; only the conditional means become σ_t·m + t·x₁.
+const HM = [-3.6, 0], HC = 1, HB = 3.4, HCELLS = [];   // HCELLS[n] = lower-left corner of cell (i, j); HB = board centre x
+for (let i = 0; i < 4; i++) for (let j = 0; j < 4; j++) if ((i + j) % 2 === 1) HCELLS.push([HB - 2 * HC + HC * i, -2 * HC + HC * j]);
+const cellAt = (i, j) => [HB - 2 * HC + HC * (i + .5), -2 * HC + HC * (j + .5)];
+let HFLOW = null;
+function heroFlow() {
+  if (HFLOW) return HFLOW;
+  const r = rng(29), D = [], X0 = [];
+  HCELLS.forEach(([cx, cy]) => { for (let k = 0; k < 30; k++) D.push([cx + .08 + (HC - .16) * r(), cy + .08 + (HC - .16) * r()]); });
+  while (X0.length < 320) { const a = gauss(r), b = gauss(r); if (a * a + b * b < 2.2 * 2.2) X0.push([HM[0] + a, HM[1] + b]); }
+  const field2 = (x, t) => {
+    const s = 1 - (1 - SIG) * t; let m = -Infinity; const lw = D.map(d => { const dx = x[0] - s * HM[0] - t * d[0], dy = x[1] - s * HM[1] - t * d[1], v = -(dx * dx + dy * dy) / (2 * s * s); if (v > m) m = v; return v; });
+    let Z = 0, ux = 0, uy = 0; D.forEach((d, j) => { const w = Math.exp(lw[j] - m); Z += w; ux += w * (d[0] - (1 - SIG) * x[0]); uy += w * (d[1] - (1 - SIG) * x[1]); });
+    return [ux / Z / s, uy / Z / s];
+  };
+  const K = 80, T = Array.from({ length: K + 1 }, (_, k) => 1 - Math.pow(1 - k / K, 2)), tr = X0.map(p => [p.slice()]);
+  let cur = X0.map(p => p.slice());
+  for (let k = 0; k < K; k++) { const dt = T[k + 1] - T[k]; cur = cur.map(x => { const u = field2(x, T[k]); return [x[0] + u[0] * dt, x[1] + u[1] * dt]; }); cur.forEach((x, i) => tr[i].push(x)); }
+  // the protagonist: a noise point low in the blob, paired with a data point x₁ in the top-left cell — a steep diagonal,
+  // so 「往哪走」 is not obvious. (Training pairs x₀ and x₁ at random; this is one such pair, drawn on its straight path, eq. 22.)
+  let hero = 0; X0.forEach((p, i) => { if (Math.hypot(p[0] + 3.3, p[1] + 1.5) < Math.hypot(X0[hero][0] + 3.3, X0[hero][1] + 1.5)) hero = i; });
+  let x1 = D[0]; const c03 = cellAt(0, 3); D.forEach(d => { if (Math.hypot(d[0] - c03[0], d[1] - c03[1]) < Math.hypot(x1[0] - c03[0], x1[1] - c03[1])) x1 = d; });
+  // the ways it might go, for the 「?」: one cell per row of the left half of the board, top to bottom (the first is x₁'s)
+  const alt = [cellAt(0, 3), cellAt(1, 2), cellAt(0, 1), cellAt(1, 0)];
+  HFLOW = { D, X0, K, tr, hero, x1, alt };
+  return HFLOW;
+}
+function heroPos(i, tau) {
+  const F = heroFlow(), u = F.K * (1 - Math.sqrt(1 - Math.min(1, Math.max(0, tau)))), k = Math.min(F.K - 1, Math.floor(u)), f = u - k;
+  const a = F.tr[i][k], b = F.tr[i][k + 1]; return [a[0] + (b[0] - a[0]) * f, a[1] + (b[1] - a[1]) * f];
+}
+function openingHero(g, box) {
+  const { COL } = g, F = heroFlow(), X = g.ctx;
+  // world x −5.9…5.5, y −3.0…2.3, scaled into the box (it shrinks after the question)
+  const s = Math.min(box.w / 11.9, box.h / 5.6), cx = box.x + box.w / 2 + .2 * s, cy = box.y + box.h / 2 - .35 * s;
+  const Q = (x, y) => [cx + x * s, cy - y * s];
+  const tW = g.qAt('每一点该往哪走'), tT = g.qAt('怎么教给模型');
+  // flow time: already under way on frame 0, freezes as 「每一点该往哪走」 is said
+  const tau = g.lerp(.07, .5, g.p(0, tW + .25, 'lin'));
+  const freeze = g.p(tW + .1, .4), teach = g.p(tT, .6);
+  // the board: faint from frame 0, lights up on 「流成数据」
+  const lit = g.p(g.qAt('流成数据'), .6);
+  HCELLS.forEach(([x, y]) => { const [px, py] = Q(x, y + HC);
+    g.rect(px, py, HC * s, HC * s, { r: 4, fill: g.rgba(COL.yellow, .06 + .12 * lit), stroke: g.rgba(COL.yellow, .3 + .45 * lit), lw: 2 }); });
+  X.save(); X.globalAlpha *= .35 + .5 * lit; X.fillStyle = COL.yellow;
+  F.D.forEach(d => { const [x, y] = Q(...d); X.fillRect(x - 1.5, y - 1.5, 3, 3); }); X.restore();
+  // the particles, with short trails; dimmed once one of them is singled out
+  X.save(); X.lineCap = 'round'; const base = X.globalAlpha, dim = 1 - .72 * freeze;
+  F.X0.forEach((_, i) => {
+    if (i === F.hero) return;
+    const [x, y] = Q(...heroPos(i, tau)), [ox, oy] = Q(...heroPos(i, Math.max(0, tau - .07 * (1 - .8 * freeze))));
+    X.globalAlpha = base * dim * .5; X.strokeStyle = COL.fg; X.lineWidth = 2; X.beginPath(); X.moveTo(ox, oy); X.lineTo(x, y); X.stroke();
+    X.globalAlpha = base * dim * .9; X.fillStyle = COL.fg; X.beginPath(); X.arc(x, y, 3.4, 0, 7); X.fill();
+  });
+  X.restore();
+  g.text('噪声', ...Q(HM[0], -2.65), { size: 32, weight: 700, color: COL.blue });
+  g.text('数据', ...Q(HB, -2.65), { size: 32, weight: 700, color: COL.yellow, alpha: .45 + .55 * lit });
+  // the protagonist on its straight path x₀ → x₁ (eq. 22): one point among the rest until singled out
+  const x0 = F.X0[F.hero], x1 = F.x1, [hx, hy] = Q(...ot(x0, x1, tau)), [ex, ey] = Q(...x1), [sx, sy] = Q(...x0);
+  const toward = (c, len) => { const [ax, ay] = Q(...c), d = Math.hypot(ax - hx, ay - hy), l = Math.min(len, d * .6); return [hx + (ax - hx) / d * l, hy + (ay - hy) / d * l]; };
+  // 「每一点该往哪走」: frozen, one point lit, four ways it might go; on 「怎么教给模型」 the others fade, x₁'s turns into the answer
+  if (freeze > 0) F.alt.forEach((c, n) => {
+    const [ax, ay] = toward(c, 190);
+    g.arrow(hx, hy, ax, ay, { color: COL.sub, lw: 3, head: 12, dash: [7, 7], k: g.p(tW + .15 + n * .12, .35), alpha: 1 - .85 * teach });
+  });
+  g.text('?', hx - 58, hy - 52, { size: 88, weight: 800, font: 'disp', color: COL.acc, alpha: g.p(tW + .25, .3) * (1 - teach) });
+  if (teach > 0) {
+    g.line(sx, sy, hx, hy, { color: g.rgba(COL.acc, .6), lw: 3, dash: [6, 7], k: teach });
+    g.circle(sx, sy, 7, { fill: g.rgba(COL.acc, .75), alpha: teach });
+    g.line(hx, hy, ex, ey, { color: COL.green, lw: 4, dash: [10, 8], k: g.p(tT + .15, .7) });
+    g.circle(ex, ey, 14, { stroke: COL.green, lw: 4, alpha: g.p(tT + .6, .4) });
+    g.text('x₁', ex - 26, ey - 26, { size: 34, weight: 700, color: COL.green, align: 'right', alpha: g.p(tT + .7, .4) });
+    const [ax, ay] = toward(x1, 150);
+    g.arrow(hx, hy, ax, ay, { color: COL.green, lw: 7, head: 20, k: g.p(tT + .35, .5) });
+    g.text('教给模型：这个方向', hx - 24, hy - 46, { size: 28, weight: 700, color: COL.green, align: 'right', alpha: g.p(tT + .8, .4) });   // where the 「?」 was
+  }
+  g.circle(hx, hy, g.lerp(3.4, 11, freeze), { fill: freeze > 0 ? COL.acc : COL.fg, alpha: Math.max(.9, freeze) });
+}
+
 PM.film({
-  paper: { title: 'Flow Matching for Generative Modeling', byline: 'Lipman 等 5 位作者 · Meta AI (FAIR) + Weizmann · 2022', arxiv: '2210.02747' },
+  paper: { title: 'Flow Matching', full: 'Flow Matching for Generative Modeling', byline: 'Lipman 等 5 位作者 · Meta AI (FAIR) + Weizmann · 2022', arxiv: '2210.02747' },
   question: '一团噪声要流成数据，**每一点该往哪走**，怎么教给模型？',
+  opening: {
+    source: 'Meta AI 2022 年',
+    badges: ['Meta AI (FAIR)', 'Weizmann', '2022'],
+    // 论文 6.1 节 Table 1（ImageNet 64×64，同一个 U-Net、同样超参）：DDPM FID 17.36 / NFE 264，FM w/ OT FID 14.45 / NFE 138
+    why: '同一个网络只换训练目标，图像质量指标 FID 从 17.36 降到 **14.45**，采样步数从 264 步降到 **138** 步',
+    points: ['同一网络只换目标', 'FID **14.45**', '采样步数 **138**'],
+    hero: openingHero,
+  },
   pronounce: { 'w/': 'with' },                                // 配音念法
   recap: [
     '向量场：每一点、每一刻都有一个箭头',

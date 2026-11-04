@@ -155,7 +155,7 @@ const PM = (() => {
   // "a **b** c" → [[a, base], [b, hl], [c, base]]
   function spans(s, base, hl) {
     const out = [];
-    String(s).split(/(\*\*[^*]+\*\*)/).forEach(p => { if (!p) return; out.push(p.startsWith('**') ? [p.slice(2, -2), hl] : [p, base]); });
+    String(s).split(/(\*\*[^*]+\*\*)/).forEach(p => { if (!p) return; out.push(p.startsWith('**') ? [p.slice(2, -2), hl, true] : [p, base]); });
     return out;
   }
   function rich(parts, x, y, o = {}) {
@@ -401,7 +401,7 @@ const PM = (() => {
     X.font = FONT.cn(size, 600);
     const units = [];
     const WORD = /[A-Za-z0-9\u0370-\u03ff\u0300-\u036f.,'’√_\-+=/%×·‖²³⁻ᵀ−∑∈≈≤≥()[\]{}<>|]+ ?|[^A-Za-z0-9]/g;
-    parts.forEach(([s, c]) => (s.match(WORD) || []).forEach(u => units.push([u, c])));
+    parts.forEach(([s, c, em]) => em && Array.from(s).length <= 8 ? units.push([s, c]) : (s.match(WORD) || []).forEach(u => units.push([u, c])));   // a short **emphasis** never breaks
     const lines = [[]]; let w = 0;
     units.forEach(u => {
       const uw = X.measureText(u[0]).width, cur = lines[lines.length - 1];
@@ -463,51 +463,53 @@ const PM = (() => {
     FILM.introDraw(G(sc, t));
   }
   // the opening template (film.js opening: {...}). Frame 0 already speaks and moves: the layout is final from the start
-  // (method name and byline as a small header, the question as a big headline, opening.hero(g, box) underneath), and the
-  // headline lights up word by word as it is said, from 0 s. The source badges come up while 「今天解读…」 is said, the
-  // reasons to read it while the third piece is said.
+  // (the full title as a small header, the question as a big headline, opening.hero(g, box) underneath). The headline is
+  // fully lit and still from frame 0 (the caption under it already follows the voice; a headline lighting up in step with
+  // it reads as a second caption) — what moves is the hero. When 「今天解读…的论文 X」 is said the full title gives way to
+  // the short name with the source badges under it; the reasons to read it come up under the hero with the third piece.
   let OPEN_BOX = null;   // the hero box, for the self-check
-  // the question is lit up character by character over its spoken piece (intro piece 0); qAt(word) is when the voice reaches word
-  function qTiming(sc) {
-    const s0 = sc.segs && sc.segs[0], chars = Array.from(txt(FILM.question || '').replace(/\*\*/g, '').replace(/\s+/g, ''));
-    return { t0: s0 ? s0.t0 : 0, len: s0 ? Math.max(.5, (s0.t1 - s0.t0 - GAP) * .95) : 0, chars };
-  }
+  // g.qAt(word): when the voice reaches word in the question, assuming an even pace over its spoken piece (intro piece 0)
   function qAt(sc, word) {
-    const q = qTiming(sc), w = Array.from(String(word).replace(/\s+/g, '')), s = q.chars.join(''), i = s.indexOf(w.join(''));
+    const s0 = sc.segs && sc.segs[0], chars = Array.from(txt(FILM.question || '').replace(/\*\*/g, '').replace(/\s+/g, ''));
+    const s = chars.join(''), w = String(word).replace(/\s+/g, ''), i = s.indexOf(w);
     if (!FILM.question || i < 0) throw new Error(`g.qAt('${word}')：问题句里没有这个词`);
-    return q.t0 + q.len * Array.from(s.slice(0, i)).length / Math.max(1, q.chars.length);
+    if (!s0) return 0;
+    return s0.t0 + Math.max(.5, (s0.t1 - s0.t0 - GAP) * .95) * Array.from(s.slice(0, i)).length / Math.max(1, chars.length);
   }
   function openingPic(t, sc) {
     const op = FILM.opening, p = FILM.paper || {}, dy = LY.dy, g = G(sc, t);
-    const tl = wrapWords(p.title || '', 30, 920), lh = 30 * 1.22, y0 = 170 + dy;
-    tl.forEach((s, i) => D.text(s, 80, y0 + i * lh, { size: 30, weight: 800, font: 'disp', align: 'left', color: COL.sub }));
-    const by = y0 + tl.length * lh + 10;
-    D.text(p.byline || '', 80, by, { size: 22, align: 'left', color: COL.sub });
-    // the question, word for word what is said first; dim until said, each character lights up as the voice reaches it
+    // which spoken piece is which: question, source, why (in that order, whichever of them exist)
+    let n = 0; const iQ = FILM.question ? n++ : -1, iS = op.source ? n++ : -1, iW = op.why ? n++ : -1;
+    const at = i => sc.segs[i] ? sc.segs[i].t0 : null, end = i => sc.segs[i] ? sc.segs[i].t1 : null;
+    // header: the paper's full title (paper.full) from frame 0; when 「今天解读…的论文 X」 is said it gives way to the short
+    // name (paper.title), and the source badges come up in the lines the full title freed, right under the name
+    const badges = op.badges || (op.source ? [op.source] : []), tS = at(iS);
+    const full = p.full || p.title || '', fl = wrapWords(full, 30, 920), lh = 30 * 1.22, y0 = 170 + dy;
+    const k = full !== (p.title || '') && tS != null ? prog(t, tS + .2, .6, 'io') : 1;   // 0 = full title, 1 = short name + badges
+    if (k < 1) fl.forEach((s, i) => D.text(s, 80, y0 + i * lh - 12 * k, { size: 30, weight: 800, font: 'disp', align: 'left', color: COL.sub, alpha: clamp(1 - 2 * k) }));
+    if (k > 0) D.text(p.title || '', 80, y0 + 4, { size: 38, weight: 800, font: 'disp', align: 'left', color: COL.fg, alpha: clamp(2 * k - 1) });
+    const yb = y0 + 62;
+    if (tS != null) {
+      let x = 80;
+      badges.forEach((b, j) => { const r = D.chip(b, x, yb, { size: 24, align: 'left', color: j === badges.length - 1 ? COL.acc : COL.blue, solid: j === badges.length - 1, alpha: prog(t, tS + .5 + j * .6, .4) }); x += r.w + 16; });
+    }
+    const by = y0 + Math.max(fl.length * lh, 62 + 20) + 10;
+    // the byline names the same lab and venue the badges do: it fades out as they come up, so the two never sit cramped together
+    D.text(p.byline || '', 80, by, { size: 22, align: 'left', color: COL.sub, alpha: tS != null && badges.length ? 1 - prog(t, tS + .2, .5) : 1 });
+    // the question, word for word what is said first; fully lit from frame 0 and still
     const QS = 56, QLH = 76, ql = FILM.question ? wrapCN(txt(FILM.question), QS, 880, COL.fg, COL.acc) : [];   // measured at 600, drawn at 700: leave room
-    const qy = by + 90, s0 = sc.segs[0], qt = qTiming(sc);
-    let lit = s0 ? Math.round(qt.chars.length * prog(t, qt.t0, qt.len, 'lin')) : 1e9;   // counted without spaces, like g.qAt
-    ql.forEach((ln, i) => {
-      const parts = [];
-      ln.forEach(([str, c]) => {   // spaces don't count, so the lit edge matches g.qAt
-        const ch = Array.from(str); let k = 0;
-        while (k < ch.length && (lit > 0 || /\s/.test(ch[k]))) { if (!/\s/.test(ch[k])) lit--; k++; }
-        if (k) parts.push([ch.slice(0, k).join(''), c]); if (k < ch.length) parts.push([ch.slice(k).join(''), COL.dim]); });
-      rich(parts, 80, qy + i * QLH, { size: QS, weight: 700, align: 'left' });
-    });
-    // the rows at the bottom, and the box the hero gets: while the question is said it runs from under the question down to
-    // the captions (the badges are not up yet); as the second piece starts it shrinks to end above the badges
-    const yBadge = ZONE.bottom - 240, yPoint = ZONE.bottom - 135;
+    const qy = by + 90;
+    ql.forEach((ln, i) => rich(ln, 80, qy + i * QLH, { size: QS, weight: 700, align: 'left' }));
+    // the hero box: from under the question down to the captions; when the reasons start (third piece) it shrinks to
+    // end above the row of points
+    const pts = op.points || [], yPoint = ZONE.bottom - 135, tW = at(iW), tW1 = end(iW);
     const top = qy + (ql.length ? (ql.length - 1) * QLH + QS / 2 : -60) + 52;
-    const big = ZONE.bottom - 30 - top, small = Math.max(120, yBadge - 70 - top);
-    const shrink = (op.source || op.why) && s0 ? prog(t, s0.t1 - .1, .6, 'io') : 0;
+    const big = ZONE.bottom - 30 - top, small = Math.max(120, yPoint - 60 - top);
+    const shrink = pts.length && tW != null ? prog(t, tW - .1, .6, 'io') : 0;
     const box = { x: 84, y: top, w: 912, h: lerp(big, small, shrink) };   // inset so a stroke round the hero stays inside the safe area
     OPEN_BOX = box;
     corner();
     if (op.hero) op.hero(g, box);
-    // which spoken piece is which: question, source, why (in that order, whichever of them exist)
-    let n = 0; const iQ = FILM.question ? n++ : -1, iS = op.source ? n++ : -1, iW = op.why ? n++ : -1;
-    const at = i => sc.segs[i] ? sc.segs[i].t0 : null, end = i => sc.segs[i] ? sc.segs[i].t1 : null;
     const row = (items, y, size, style) => {   // a centred row of chips, shrunk to fit 920 px
       if (!items.length) return;
       const ws = s => { X.font = FONT.cn(size, 600); return spans(s).reduce((a, q) => a + X.measureText(q[0]).width, 0) + size * 1.1; };
@@ -516,10 +518,9 @@ const PM = (() => {
       let x = W / 2 - w / 2;
       items.forEach((s, j) => { const st = style(j); if (st.alpha > 0) D.chip(s, x, y, { size, align: 'left', ...st }); x += ws(s) + 24; });
     };
-    const badges = op.badges || (op.source ? [op.source] : []), tS = at(iS);
-    if (tS != null) row(badges, yBadge, 34, j => ({ color: j === badges.length - 1 ? COL.acc : COL.blue, solid: j === badges.length - 1, alpha: prog(t, tS + .5 + j * .8, .4) }));
-    const pts = op.points || [], tW = at(iW), tW1 = end(iW), PC = [COL.blue, COL.green, COL.acc2, COL.purple, COL.yellow];
-    if (tW != null) row(pts, yPoint, 28, j => ({ color: PC[j % PC.length], alpha: prog(t, lerp(tW, tW1, .02 + .9 * j / Math.max(1, pts.length)), .4) }));
+    const PC = [COL.blue, COL.green, COL.acc2, COL.purple, COL.yellow];
+    // the whole row is laid out faintly as the third piece starts (so it sits centred), each point lights up as it is reached
+    if (tW != null) row(pts, yPoint, 28, j => ({ color: PC[j % PC.length], alpha: Math.max(.25 * prog(t, tW - .1, .4), prog(t, lerp(tW, tW1, .02 + .9 * j / Math.max(1, pts.length)), .4)) }));
   }
   // a recap item written as { text, draw(g, box, u) } gets a small panel to the right of its line with a moving sketch of
   // its scene: 320×124 in 3:4 (300 wide in portrait, to stay inside the safe area), centred on the line

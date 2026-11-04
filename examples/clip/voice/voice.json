@@ -2,10 +2,20 @@
  "engine": "edge:zh-CN-YunxiNeural:+30%",
  "voice": "zh-CN-YunxiNeural",
  "clips": {
-  "这篇论文回答一个问题：不给人工标签，模型能不能光靠网上的图文配对学会认图？": {
-   "file": "3654bbf77293.mp3",
-   "dur": 5.904,
-   "end": 5.896
+  "不给人工标签，模型能不能光靠网上的图文配对学会认图？": {
+   "file": "0bdcc164b07e.mp3",
+   "dur": 4.608,
+   "end": 4.608
+  },
+  "今天解读 OpenAI 2021 的论文 CLIP": {
+   "file": "5f6ab252d144.mp3",
+   "dur": 3.12,
+   "end": 3.108
+  },
+  "ImageNet 的 128 万张标注图一张没用，zero-shot 准确率就到了 76.2%，追平原版 ResNet 50": {
+   "file": "9edd81e8d621.mp3",
+   "dur": 7.584,
+   "end": 7.569
   },
   "过去的视觉模型靠人工标签训练，比如 ImageNet：128 万张图，1000 个类别": {
    "file": "c2b65a9e025f.mp3",

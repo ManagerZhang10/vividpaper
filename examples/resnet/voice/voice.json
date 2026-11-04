@@ -2,10 +2,20 @@
  "engine": "edge:zh-CN-YunxiNeural:+30%",
  "voice": "zh-CN-YunxiNeural",
  "clips": {
-  "这篇论文回答一个问题：网络越堆越深，为什么反而越训越差？": {
-   "file": "1f0dd22c1d2f.mp3",
-   "dur": 4.464,
-   "end": 4.444
+  "网络越堆越深，为什么反而越训越差？": {
+   "file": "00ba84c0defb.mp3",
+   "dur": 2.952,
+   "end": 2.944
+  },
+  "今天解读微软研究院何恺明团队 CVPR 2016 的论文 ResNet": {
+   "file": "be4ca62caeeb.mp3",
+   "dur": 4.8,
+   "end": 4.8
+  },
+  "152 层，比 VGG 深 8 倍，计算量还更少；ImageNet 错误率 3.57%，ILSVRC 和 COCO 2015 一共拿下 5 项第一": {
+   "file": "0bb510630691.mp3",
+   "dur": 8.736,
+   "end": 8.733
   },
   "2015 年，ImageNet 上最好的模型都在拼深度：16 到 30 层": {
    "file": "21cca00028d7.mp3",

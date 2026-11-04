@@ -57,10 +57,49 @@ function tile(g, kind, step, x, y, s, o = {}) {
   return R;
 }
 const fmt2 = v => v.toFixed(2);
+// the step whose original-image share √ā_t is closest to a (0–1): the hero walks evenly in how much cat shows,
+// so the counter races through the all-noise steps (1000 → ~700) and the cat starts showing from the first second
+const stepAt = a => { let lo = 0, hi = T; while (hi - lo > 1) { const m = (lo + hi) >> 1; if (sa(m) >= a) lo = m; else hi = m; } return a >= 1 ? 0 : hi; };
+
+// ---------- opening hero: one big tile, washed from pure noise (t = 1000) to the cat (t = 0) while the question is said ----------
+// left: the tile; right: the step counter and a 6-cell chain (paper Figure 2's x_T → … → x_0), lit as the counter passes each cell
+function hero(g, box) {
+  const { COL } = g, te = g.qAt('？') + .15;                          // the question finishes being said → t = 0, then it holds
+  const u = g.clamp(g.t / te), step = stepAt(1 - Math.pow(1 - u, 1.6));   // coarse shape first, fine detail last (like the paper's Figure 6)
+  const s = Math.min(box.h - 8, box.w - 248), k = s / 664, gx = box.x + (box.w - (s + 248)) / 2, iy = box.y + (box.h - s) / 2;
+  const done = g.p(g.qAt('一张图'), .5);
+  const I = tile(g, 'x', step, gx, iy, s, { n: 230, stroke: step === 0 ? COL.green : COL.faint, lw: 3 });
+  if (done > 0) g.mark(I.x - 8, I.y - 8, I.w + 16, I.h + 16, { k: done, color: COL.green, lw: 4 });
+  // the counter
+  const cx = gx + s + 28, fz = Math.max(30, Math.round(54 * k));
+  g.text(`t = **${step}**`, cx, iy + 26 * k, { size: fz, font: 'disp', weight: 800, align: 'left' });
+  g.text('共 1000 步 · 示意', cx, iy + 26 * k + fz * .5 + 30 * k + 4, { size: Math.max(22, Math.round(26 * k)), align: 'left', color: COL.sub });
+  // the chain: there from frame 0 (faint); from 「一步步」 each cell the counter has passed lights up and stays lit
+  const marks = [1000, 600, 400, 250, 100, 0], labs = ['纯噪声', 't = 600', 't = 400', 't = 250', 't = 100', '一张图'];
+  const top = iy + 118 * k, gap = 10 * k, c = (iy + s - top - 5 * gap) / 6, lz = Math.max(22, Math.round(26 * k));
+  const lit0 = g.p(g.qAt('一步步'), .4), noise = g.p(g.qAt('纯噪声'), .4);
+  let cur = 0; marks.forEach((v, i) => { if (step <= v) cur = i; });
+  marks.forEach((v, i) => {
+    const passed = step <= v, y = top + i * (c + gap);
+    const a = i === 0 ? g.lerp(.4, 1, Math.max(noise, lit0)) : passed ? g.lerp(.4, 1, lit0) : .4;
+    const st = i === 5 && step === 0 ? COL.green : i === cur ? COL.acc : COL.faint;
+    tile(g, 'x', v, cx, y, c, { n: 128, alpha: a, stroke: st, lw: i === cur ? 3 : 2 });
+    const end = i === 0 || i === 5, hot = i === 0 ? noise : i === 5 ? done : 0;
+    g.text(labs[i], cx + c + 12, y + c / 2, { size: end ? lz + 2 : lz, font: end ? 'cn' : 'disp', align: 'left',
+      color: hot > .5 ? (i === 5 ? COL.green : COL.acc) : end ? COL.fg : COL.sub, alpha: end ? g.lerp(.55, 1, hot) : a });
+  });
+}
 
 PM.film({
-  paper: { title: 'Denoising Diffusion Probabilistic Models', byline: 'Ho, Jain, Abbeel · UC Berkeley · NeurIPS 2020', arxiv: '2006.11239' },
+  paper: { title: 'DDPM', full: 'Denoising Diffusion Probabilistic Models', byline: 'Ho, Jain, Abbeel · UC Berkeley · NeurIPS 2020', arxiv: '2006.11239' },
   question: '怎么从**纯噪声**一步步「洗」出一张图？',
+  opening: {
+    source: 'UC Berkeley NeurIPS 2020',
+    badges: ['UC Berkeley', 'NeurIPS 2020'],
+    why: '无条件生成 CIFAR-10，FID 做到 **3.17**，超过 StyleGAN2 + ADA 的 3.26；整个模型在一台 TPU v3-8 上训 10.6 小时',
+    points: ['FID **3.17**', '超过 StyleGAN2 + ADA', 'TPU 训 **10.6** 小时'],
+    hero,
+  },
   pronounce: { 'ā': 'alpha bar ' },                           // 配音念法：ā 就是论文的 ᾱ
   recap: [
     '前向：每步加一点噪声，1000 步后只剩**纯噪声**',
