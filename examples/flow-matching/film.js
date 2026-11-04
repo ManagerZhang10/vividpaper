@@ -1,4 +1,4 @@
-// Flow Matching for Generative Modeling — 3 分钟动效解读 · 张指导出品
+// Flow Matching for Generative Modeling — 3 分钟动效解读 · VividPaper
 // 主线：一团噪声要流成数据，每一点该往哪走，怎么教给模型？主角：论文 Figure 4 的二维棋盘，和其中一颗噪声粒子 x₀ 与它的落点 x₁。
 // 画面上的流动是真算的：按论文式 (8)(21) 求整团数据的理想箭头，欧拉法积分；σ_min 论文只说「足够小」，这里取 0.05（示意）。
 

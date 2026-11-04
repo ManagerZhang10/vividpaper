@@ -37,7 +37,7 @@ def pack(d, voice=True):
             assets[f.stem] = f"data:{mt};base64," + base64.b64encode(f.read_bytes()).decode()
     vo = voice_clips(d) if voice else None
     m = re.search(r"title:\s*['\"]([^'\"]+)['\"]", film)
-    title = (m.group(1) if m else d.name) + " · 3 分钟动效解读 · 张指导出品"
+    title = (m.group(1) if m else d.name) + " · 3 分钟动效解读 · VividPaper"
 
     html = (ENGINE / "player.html").read_text(encoding="utf-8")
     for key, val in {

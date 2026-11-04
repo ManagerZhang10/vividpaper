@@ -14,7 +14,8 @@
 
 ## 规则
 
-1. **署名不可去掉。** 引擎在片头、片尾和页面标题里画「张指导出品」；每帧右上角（含 `introDraw` 主图片头）和播放器右上角宣传工具名「VividPaper」（`tool: false` 的片子不显示工具名，右上角改回「张指导出品」）。改引擎或播放器时保留这些位置，不加开关去掉它们。
+1. **片尾的工具署名不可去掉。** 引擎在每部片子的片尾分隔线下画一行小字「本视频由开源工具 VividPaper 生成」和徽章「★ Star | ManagerZhang10/vividpaper」，播放器页脚带可点的仓库链接，页面标题和 `<meta name="generator">` 写 VividPaper：任何人导出的片子都带着它，看到的人才能找到仓库。这些不随配置变，不加开关去掉它们。
+   每帧右上角（含片头模板 `opening` 和 `introDraw` 主图片头）、默认片头左上的品牌字和播放器右上角显示 film.js 的 `brand`，默认「VividPaper」。仓库里（引擎、文档、示例）不写死任何个人署名；作者自己要发的片子在本地 film.js 里写 `brand`。改引擎或播放器时保留这些位置。
 2. 改了 `engine/` 或 `scripts/` 后，把 `examples/` 下每个 demo 重新 build + check 一遍，全部零问题再提交：
    ```bash
    for d in examples/*/; do n=$(basename $d); python3 skills/vividpaper/scripts/build.py $d -o $d$n.html && python3 skills/vividpaper/scripts/check.py $d$n.html; done

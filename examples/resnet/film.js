@@ -1,4 +1,4 @@
-// Deep Residual Learning for Image Recognition (ResNet) — 3 分钟动效解读 · 张指导出品
+// Deep Residual Learning for Image Recognition (ResNet) — 3 分钟动效解读 · VividPaper
 // 主线：网络越堆越深，为什么反而越训越差？主角：「多出来的那些层」，画成一排细竖条，一根 = 一层。
 // 颜色：x / 捷径 = 蓝，残差 F = 赭橙，输出 H = 绿；20 层 = 黄、56 层 = 红（和论文图 1 的线同色）。
 

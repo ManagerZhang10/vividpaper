@@ -1,4 +1,4 @@
-// Attention Is All You Need — 3 分钟动效解读 · 张指导出品
+// Attention Is All You Need — 3 分钟动效解读 · VividPaper
 // 主线：翻译模型能不能完全不用 RNN，只靠注意力？主角：句子里的 its（论文图 4 的同一句话）。
 
 const WORDS = ['The', 'Law', 'will', 'never', 'be', 'perfect', ',', 'but', 'its', 'application', 'should', 'be', 'just'];

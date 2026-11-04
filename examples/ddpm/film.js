@@ -1,4 +1,4 @@
-// Denoising Diffusion Probabilistic Models — 3 分钟动效解读 · 张指导出品
+// Denoising Diffusion Probabilistic Models — 3 分钟动效解读 · VividPaper
 // 主线：怎么从纯噪声一步步「洗」出一张图？主角：一张猫图，被一步步加噪、再一步步还原。
 // 加噪是在真图上逐像素加固定种子的高斯噪声：x_t = √ᾱ_t · x_0 + √(1−ᾱ_t) · ε，ᾱ_t 按论文的 schedule 算。
 
