@@ -601,18 +601,62 @@ const PM = (() => {
     const items = TL.voice.filter(v => v.clip);
     // an exporter may hand in one pre-mixed track (e.g. voice + music, the same mix as its video): play that instead
     if (window.PM_TRACK) return { url: URL.createObjectURL(await (await fetch(window.PM_TRACK)).blob()), clips: items.length, seconds: TL.total };
-    if (!items.length) return null;
+    if (!items.length && !window.PM_BGM) return null;
     const rate = 24000, ac = new OfflineAudioContext(1, 1, rate), out = new Float32Array(Math.ceil(TL.total * rate));
+    const decode = async src => { const bytes = Uint8Array.from(atob(src.split(',')[1]), c => c.charCodeAt(0)), a = await ac.decodeAudioData(bytes.buffer);
+      if (a.numberOfChannels < 2) return a.getChannelData(0);
+      const m = new Float32Array(a.length); for (let c = 0; c < a.numberOfChannels; c++) { const d = a.getChannelData(c); for (let i = 0; i < m.length; i++) m[i] += d[i] / a.numberOfChannels; } return m; };
     for (const v of items) {
-      const bytes = Uint8Array.from(atob(v.clip.src.split(',')[1]), c => c.charCodeAt(0));
-      const d = (await ac.decodeAudioData(bytes.buffer)).getChannelData(0), at = Math.round(v.t * rate);
+      const d = await decode(v.clip.src), at = Math.round(v.t * rate);
       for (let i = 0; i < d.length && at + i < out.length; i++) out[at + i] += d[i];
+    }
+    if (window.PM_BGM) {   // build.py --bgm: music under the voice, ducked while it speaks
+      try { mixBgm(out, await decode(window.PM_BGM.src), rate, window.PM_BGM.drop); }
+      catch (e) { console.warn('配乐解码失败，只放配音', e); }
     }
     const b = new DataView(new ArrayBuffer(44 + out.length * 2)), str = (o, s) => [...s].forEach((c, i) => b.setUint8(o + i, c.charCodeAt(0)));
     str(0, 'RIFF'); b.setUint32(4, 36 + out.length * 2, true); str(8, 'WAVEfmt '); b.setUint32(16, 16, true); b.setUint16(20, 1, true); b.setUint16(22, 1, true);
     b.setUint32(24, rate, true); b.setUint32(28, rate * 2, true); b.setUint16(32, 2, true); b.setUint16(34, 16, true); str(36, 'data'); b.setUint32(40, out.length * 2, true);
     out.forEach((v, i) => b.setInt16(44 + i * 2, clamp(v, -1, 1) * 32767, true));
     return { url: URL.createObjectURL(new Blob([b], { type: 'audio/wav' })), clips: items.length, seconds: +(out.length / rate).toFixed(2) };
+  }
+
+  // Background music (build.py --bgm), mixed the same way as the video exporter (video-studio render.mix), so the page sounds
+  // like the finished video: the track's beat drop (found near 15 s, or --bgm-drop) lands at 0.3 s; when the film outlasts the
+  // track its loud body loops with a 2 s crossfade; the last 2.5 s fade out; the music sits at 0.42 and ducks to 0.12 while
+  // the voice speaks (attack ~2 ms, release ~17 ms per 1 ms step); the sum is peak-limited to 0.98.
+  function movRms(x, w) {   // sqrt of a centred moving average of x², window w samples
+    const c = new Float64Array(x.length + 1); for (let i = 0; i < x.length; i++) c[i + 1] = c[i] + x[i] * x[i];
+    const h = w >> 1, r = new Float32Array(x.length);
+    for (let i = 0; i < x.length; i++) { const a = Math.max(0, i - h), b = Math.min(x.length, i - h + w); r[i] = Math.sqrt(Math.max(0, (c[b] - c[a]) / w)); }
+    return r;
+  }
+  function findDrop(m, rate, approx = 15) {
+    const hop = rate / 100, e = movRms(m, hop * 4), db = i => 20 * Math.log10((e[i * hop] || 0) + 1e-6);
+    const lo = Math.max(0, (approx - 4) * 100), hi = (approx - 1) * 100; if (hi * hop >= m.length) return 0;
+    const base = Array.from({ length: hi - lo }, (_, k) => db(lo + k)).sort((a, b) => a - b)[(hi - lo) >> 1];
+    for (let i = hi; i < (approx + 4) * 100 && i * hop < m.length; i++) if (db(i) > base + 12) return i / 100;
+    return approx;
+  }
+  function mixBgm(voice, src, rate, drop) {
+    const n = voice.length, dropAt = drop == null || drop === 'auto' ? findDrop(src, rate) : +drop, off = Math.round((dropAt - .3) * rate);
+    const e1 = movRms(src, rate); let end = src.length - 1; while (end > 0 && e1[end] <= .1) end--; end = Math.max(1, end - rate);   // drop the abrupt ending
+    const music = new Float32Array(n), at = i => { const j = i + off; return j >= 0 && j < end ? src[j] : 0; };
+    let L = Math.max(0, Math.min(n, end - off)); for (let i = 0; i < L; i++) music[i] = at(i);
+    const xf = 2 * rate, b0 = Math.round(dropAt * rate), body = end - b0;   // loop the loud body with a 2 s crossfade
+    while (L < n && body > 2 * xf) {
+      const s = L - xf;
+      for (let k = 0; k < body && s + k < n; k++) { const v = src[b0 + k]; music[s + k] = k < xf ? music[s + k] * (1 - k / xf) + v * (k / xf) : v; }
+      L = s + body;
+    }
+    const fade = Math.round(2.5 * rate); for (let i = Math.max(0, n - fade); i < n; i++) music[i] *= (n - i) / fade;
+    const env = movRms(voice, rate / 100 * 3), step = rate / 1000; let g = 0, peak = 0;
+    for (let i0 = 0; i0 < n; i0 += step) {
+      const act = env[i0] > .01 ? 1 : 0; g += (act - g) * (act > g ? .6 : .06);
+      for (let i = i0; i < Math.min(n, i0 + step); i++) { voice[i] += music[i] * (.42 - .30 * g); peak = Math.max(peak, Math.abs(voice[i])); }
+    }
+    if (peak > .98) for (let i = 0; i < n; i++) voice[i] *= .98 / peak;
+    return { drop: dropAt };
   }
 
   // ---------- self-check (?audit): sample the film, report problems, render a contact sheet ----------
