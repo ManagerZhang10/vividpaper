@@ -1,0 +1,86 @@
+<!-- 第 2 幕 · 新办法：每个词直接看所有词 -->
+<template>
+  <style>
+    #root { position: absolute; inset: 0; }
+    #self-stage { position: absolute; inset: 0; font-family: "VP Sans", sans-serif; color: #F4F3EF; }
+    #self-svg, #self-svg-top { position: absolute; left: 0; top: 0; overflow: visible; }
+    #self-stage .tok { position: absolute; border: 2px solid #3A3A42; border-radius: 12px; background: #15151A;
+      font-size: 38px; font-weight: 700; display: flex; align-items: center; justify-content: center; white-space: nowrap; }
+    #self-stage .lbl { position: absolute; white-space: nowrap; font-weight: 600; }
+    #self-stage .core { position: absolute; width: 72px; height: 72px; border-radius: 10px; background: #FF6A2C; }
+    #self-fig { position: absolute; left: 132px; top: 672px; width: 816px; padding: 18px; background: #fff; border-radius: 16px; }
+    #self-fig img { display: block; width: 780px; height: auto; }
+  </style>
+  <div id="root" data-composition-id="self" data-width="1080" data-height="1440">
+    <div id="self-stage">
+      <svg id="self-svg" width="1080" height="1440" viewBox="0 0 1080 1440"></svg>
+      <div id="self-fig"><img id="self-fig-img" src="assets/figures/fig4_its.png" alt="论文 Figure 4"></div>
+      <svg id="self-svg-top" width="1080" height="1440" viewBox="0 0 1080 1440"></svg>
+    </div>
+    <script>
+      (async () => {
+        const S = window.VP.scene('self'), { L } = S, F = window.FILM, C = F.COL;
+        await document.fonts.load('700 38px "VP Sans"', 'The Law will').catch(e => console.warn('VP Sans 没加载上', e));
+        const stage = document.getElementById('self-stage'), svg = document.getElementById('self-svg'), top = document.getElementById('self-svg-top');
+        const tl = gsap.timeline({ paused: true });
+        // the sentence; the second row eases 40 px further down to make room for the lines
+        const R = F.sentence(stage, 230, 200, 'self');
+        R.forEach(r => { if (r.row) { tl.fromTo(r.el, { y: 0 }, { y: 40, duration: 1, ease: 'power2.inOut' }, .2); r.y += 40; r.cy += 40; r.top += 40; r.bottom += 40; } });
+        const its = R[F.ITS];
+        Object.assign(its.el.style, { borderColor: C.acc, borderWidth: '4px', background: F.rgba(C.acc, .2) });
+        // its "looks around": a ring sweeps over the whole sentence
+        const ring = F.svg(svg, 'circle', { cx: its.cx, cy: its.cy, r: 40, fill: 'none', stroke: C.acc, 'stroke-width': 4, opacity: 0 });
+        tl.fromTo(ring, { attr: { r: 40 }, opacity: .7 }, { attr: { r: 800 }, opacity: 0, duration: 2.4, ease: 'power2.inOut' }, L(0) + 1.2);
+        // its looks at every word, one line after another; thicker = looks more (line 2)
+        const look = [];
+        R.forEach((r, j) => {
+          if (j === F.ITS) return;
+          const up = r.cy < its.cy, w = F.ATT[j];
+          const g = F.curveD([its.cx, up ? its.top : its.bottom], [r.cx, r.bottom], up ? 0 : -70 - 8 * Math.abs(j - F.ITS));
+          const p = F.svg(svg, 'path', { d: g.d, fill: 'none', stroke: F.rgba(C.acc, .4 + w), 'stroke-width': 2 + 34 * w, 'stroke-linecap': 'round' }), dr = F.drawOn(p);
+          tl.fromTo(p, dr.from, { ...dr.to, duration: .6, ease: 'power2.inOut' }, L(1) + .3 + Math.abs(j - F.ITS) * .22);
+          if (j === F.LAW || j === F.APP) { tl.to(p, { stroke: C.acc, duration: .3 }, L(2)); tl.to(r.el, { borderColor: C.acc, duration: .3 }, L(2)); }
+          look.push(p);
+        });
+        // the evidence: the paper's own figure, its / Law / application boxed one after another (line 3)
+        const fig = document.getElementById('self-fig'), FX = 150, FY = 690, FW = 780, FH = 780 * 771 / 1205;
+        const box = (x0, y0, x1, y1) => [FX + x0 * FW, FY + y0 * FH, (x1 - x0) * FW, (y1 - y0) * FH];
+        tl.fromTo(fig, { opacity: 0 }, { opacity: 1, duration: .4 }, L(2));
+        const marks = [[box(.298, 0, .342, .3), C.blue, 'its', 'right', .4], [box(.05, .67, .095, .985), C.acc, 'Law', 'left', 1.6], [box(.335, .67, .378, .985), C.acc, 'application', 'right', 3.0]];
+        const figParts = [fig];
+        marks.forEach(([[x, y, w, h], c, name, side, d], k) => {
+          const m = F.svg(top, 'rect', { x, y, width: w, height: h, rx: 8, fill: 'none', stroke: c, 'stroke-width': 5 }), dm = F.drawOn(m);
+          tl.fromTo(m, dm.from, { ...dm.to, duration: .6 }, L(2) + d);
+          const lab = F.chip(stage, `self-mark${k}`, name, side === 'right' ? x + w + 16 : x - 16, y + h / 2, { size: 30, color: c, solid: true, align: side === 'right' ? 'left' : 'right' });
+          tl.fromTo(lab, { opacity: 0 }, { opacity: 1, duration: .3 }, L(2) + d + .3);
+          figParts.push(m, lab);
+        });
+        const note = F.label(stage, 'self-note', '图：论文 Figure 4（第 5 层的两个注意力头）', 930, 650, { size: 22, color: C.dim, align: 'right' });
+        tl.fromTo(note, { opacity: 0 }, { opacity: 1, duration: .4 }, L(2));
+        figParts.push(note);
+        tl.to(figParts, { opacity: 0, duration: .35 }, L(3) - .15);
+        // everyone looks at everyone at once (line 4)
+        for (let i = 0; i < 13; i++) for (let j = i + 1; j < 13; j++) {
+          const g = F.curveD([R[i].cx, R[i].cy], [R[j].cx, R[j].cy], 30 + 4 * (j - i));
+          const p = F.svg(svg, 'path', { d: g.d, fill: 'none', stroke: F.rgba(C.blue, .25), 'stroke-width': 2 }), dr = F.drawOn(p);
+          tl.fromTo(p, dr.from, { ...dr.to, duration: .8 }, L(3) + i * .08);
+        }
+        tl.to(look, { opacity: .3, duration: 1.2 }, L(3));
+        const c1 = F.chip(stage, 'self-chip1', '任意两个词：**1 步**', 300, 860, { size: 38 });
+        const c2 = F.chip(stage, 'self-chip2', '13 个词：**同时算**', 780, 860, { size: 38, color: C.blue });
+        tl.fromTo(c1, { opacity: 0 }, { opacity: 1, duration: .4 }, L(3) + 1.4);
+        tl.fromTo(c2, { opacity: 0 }, { opacity: 1, duration: .4 }, L(3) + 2);
+        for (let k = 0; k < 8; k++) {
+          const el = document.createElement('div'); el.className = 'core'; el.id = `self-core${k}`;
+          Object.assign(el.style, { left: `${180 + k * 92}px`, top: '960px' }); stage.appendChild(el);
+          tl.fromTo(el, { opacity: 0 }, { opacity: 1, duration: .3 }, L(3) + 2.4 + k * .06);
+        }
+        const msg = F.label(stage, 'self-msg', '8 个 GPU 核心全部开工', 540, 1080, { size: 30, color: C.sub });
+        tl.fromTo(msg, { opacity: 0 }, { opacity: 1, duration: .4 }, L(3) + 2.8);
+        tl.fromTo(stage, { opacity: 0 }, { opacity: 1, duration: .35, ease: 'none' }, 0);
+        tl.to(stage, { opacity: 0, duration: .3, ease: 'none' }, S.dur - .3);
+        window.__timelines['self'] = tl;
+      })();
+    </script>
+  </div>
+</template>

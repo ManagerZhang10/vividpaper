@@ -1,0 +1,137 @@
+<!-- VividPaper chrome layer for HyperFrames films · https://github.com/ManagerZhang10/vividpaper
+     Mounted by vp_hf.py as the top layer of every film. It draws what pm.js draws around a scene: the chapter number and
+     name, the brand in the top-right corner, the captions, and the end card with the tool credit and the
+     「★ Star | ManagerZhang10/vividpaper」 badge. The credit has no switch (AGENTS.md rule 1).
+     Times come from window.VP_TIMING (written by vp_hf.py), so captions follow the voice when there is one.
+     Drawing code is ported from engine/pm.js (wrapCaption, caption, header, brandMark, outro) so the look stays the same. -->
+<template>
+  <style>
+    #root { position: absolute; inset: 0; pointer-events: none; }
+    #vpc-canvas { position: absolute; left: 0; top: 0; width: 1080px; height: 1440px; }
+  </style>
+  <div id="root" data-composition-id="vpchrome" data-width="1080" data-height="1440">
+    <canvas id="vpc-canvas" width="1080" height="1440" data-layout-ignore></canvas>
+    <script>
+      (() => {
+        const T = window.VP_TIMING, W = 1080, H = 1440;
+        const ZONE = { top: 130, bottom: 1190, cap: 1300 }, CAPW = [940, 960], HEAD = [56, 72, 700];
+        const TOOL = 'VividPaper', REPO = 'ManagerZhang10/vividpaper', BRAND = T.brand || TOOL;
+        const COL = { bg: '#0B0B0E', panel: '#15151A', fg: '#F4F3EF', sub: '#C9C9CF', dim: '#8A8A92', faint: '#3A3A42', acc: '#FF6A2C' };
+        const SANS = '"VP Sans","PingFang SC","Microsoft YaHei",sans-serif';
+        const FONT = { cn: (s, w) => `${w} ${s}px ${SANS}`, mono: (s, w) => `${w} ${s}px ui-monospace,Menlo,Consolas,monospace` };
+        const clamp = (v, a = 0, b = 1) => Math.min(b, Math.max(a, v));
+        const prog = (t, a, d) => { const k = clamp((t - a) / Math.max(d, 1e-6)); return 1 - Math.pow(1 - k, 3); };
+        const rgba = (hex, a) => { const n = parseInt(hex.slice(1), 16); return `rgba(${n >> 16},${(n >> 8) & 255},${n & 255},${a})`; };
+        const C = document.getElementById('vpc-canvas'), X = C.getContext('2d');
+        const withA = (a, fn) => { if (a <= .001) return; X.save(); X.globalAlpha *= a; fn(); X.restore(); };
+        function spans(s, base, hl) {
+          const out = [];
+          String(s).split(/(\*\*[^*]+\*\*)/).forEach(p => { if (!p) return; out.push(p.startsWith('**') ? [p.slice(2, -2), hl, true] : [p, base]); });
+          return out;
+        }
+        function rich(parts, x, y, o = {}) {
+          let size = o.size ?? 40; const w = o.weight ?? 600, f = FONT[o.font ?? 'cn'];
+          X.font = f(size, w);
+          let tw = parts.reduce((a, p) => a + X.measureText(p[0]).width, 0);
+          if (o.maxW && tw > o.maxW) { size = Math.floor(size * o.maxW / tw); X.font = f(size, w); tw = parts.reduce((a, p) => a + X.measureText(p[0]).width, 0); }
+          const align = o.align ?? 'center'; let cx = align === 'center' ? x - tw / 2 : align === 'right' ? x - tw : x; const x0 = cx;
+          withA(o.alpha ?? 1, () => { X.textAlign = 'left'; X.textBaseline = 'middle'; for (const [s, c] of parts) { X.fillStyle = c; X.fillText(s, cx, y); cx += X.measureText(s).width; } });
+          return { x: x0, y: y - size / 2, w: tw, h: size };
+        }
+        const text = (s, x, y, o = {}) => rich(spans(s, o.color ?? COL.fg, o.hl ?? COL.acc), x, y, o);
+        function rect(x, y, w, h, o = {}) {
+          withA(o.alpha ?? 1, () => {
+            X.beginPath(); X.roundRect(x, y, w, h, o.r ?? 14);
+            if (o.fill) { X.fillStyle = o.fill; X.fill(); }
+            if (o.stroke) { X.strokeStyle = o.stroke; X.lineWidth = o.lw ?? 3; X.stroke(); }
+          });
+        }
+        function chip(s, x, y, o = {}) {
+          const size = o.size ?? 28, c = o.color ?? COL.acc, px = size * .55;
+          X.font = FONT.cn(size, 600); const tw = spans(s).reduce((a, p) => a + X.measureText(p[0]).width, 0), w = tw + px * 2, h = size * 1.6;
+          const x0 = o.align === 'left' ? x : x - w / 2;
+          rect(x0, y - h / 2, w, h, { r: h / 2, fill: rgba(c, .16), stroke: rgba(c, .5), lw: 2, alpha: o.alpha ?? 1 });
+          rich(spans(s, c, COL.fg), x0 + px, y, { size, align: 'left', alpha: o.alpha ?? 1 });
+        }
+        const markW = (size, label) => { X.font = FONT.cn(size, 700); return X.measureText(label).width + size * .62 + 12; };
+        function brandMark(x, y, size, a = 1) {
+          const w = markW(size, BRAND), sq = size * .62, x0 = x - w;
+          rect(x0, y - sq / 2, sq, sq, { r: sq * .28, fill: COL.acc, alpha: a });
+          rich([[BRAND, COL.fg]], x0 + sq + 12, y + 1, { size, weight: 700, align: 'left', alpha: a });
+        }
+        function header(sc, a) {
+          const [hx, hy, hw] = HEAD;
+          chip(String(sc.num).padStart(2, '0'), hx, hy, { size: 26, align: 'left', alpha: a });
+          const room = W - hx - markW(26, BRAND) - 24 - (hx + 72);
+          text(sc.name, hx + 72, hy, { size: 30, align: 'left', color: COL.sub, alpha: a, maxW: Math.min(hw, room) });
+        }
+        // captions: ≤ 2 lines, ASCII words never split, closing punctuation never starts a line (pm.js wrapCaption)
+        function wrapCaption(parts, size, maxW) {
+          X.font = FONT.cn(size, 600);
+          const units = [], WORD = /[A-Za-z0-9Ͱ-Ͽ̀-ͯ.,'’√_\-+=/%×·‖²³⁻ᵀ−∑∈≈≤≥()[\]{}<>|]+ ?|[^A-Za-z0-9]/g;
+          parts.forEach(([s, c, em]) => em && Array.from(s).length <= 8 ? units.push([s, c]) : (s.match(WORD) || []).forEach(u => units.push([u, c])));
+          const lines = [[]]; let w = 0;
+          units.forEach(u => {
+            const uw = X.measureText(u[0]).width, cur = lines[lines.length - 1];
+            if (w + uw > maxW && cur.length && !/^[，。、：；！？）」』”,.!?:;)\]]/.test(u[0])) {
+              const carry = [];
+              while (cur.length && /^[（「『“(\[]$/.test(cur[cur.length - 1][0])) carry.unshift(cur.pop());
+              if (!carry.length) { const k = cur.map(q => q[0]).findLastIndex((q, j) => j >= cur.length - 4 && j < cur.length - 1 && /^[，、：；]$/.test(q)); if (k > 0) carry.push(...cur.splice(k + 1)); }
+              lines.push(carry); w = carry.reduce((a, q) => a + X.measureText(q[0]).width, 0);
+            }
+            lines[lines.length - 1].push(u); w += uw;
+          });
+          const last = lines[lines.length - 1], prev = lines[lines.length - 2], solo = l => l.map(q => q[0]).join('').replace(/[，。、：；！？）」』”,.!?:;)\]\s]/g, '');
+          if (prev && prev.length > 1 && Array.from(solo(last)).length === 1) last.unshift(prev.pop());
+          return lines.map(l => { const m = []; l.forEach(([s, c]) => { if (m.length && m[m.length - 1][1] === c) m[m.length - 1][0] += s; else m.push([s, c]); }); if (m.length) m[m.length - 1][0] = m[m.length - 1][0].trimEnd(); return m; });
+        }
+        const warned = new Set(); window.VP_CHROME_WARN = [];
+        function caption(sc, lt) {
+          const l = sc.lines.find(l => lt >= l.t0 && lt < l.t1); if (!l) return;
+          const a = Math.min(l.t0 <= 0 ? 1 : clamp((lt - l.t0) / .15), clamp((l.t1 - lt) / .12));
+          let size = 42, lines = wrapCaption(spans(l.text, COL.fg, COL.acc), size, CAPW[0]);
+          if (lines.length > 2) {
+            if (!warned.has(l.text)) { warned.add(l.text); window.VP_CHROME_WARN.push({ kind: '字幕太长', scene: sc.id, msg: `超过两行：「${l.text.replace(/\*\*/g, '')}」` }); }
+            size = 36; lines = wrapCaption(spans(l.text, COL.fg, COL.acc), size, CAPW[1]);
+          }
+          const lh = size * 1.45, y0 = ZONE.cap - (lines.length - 1) * lh / 2;
+          lines.forEach((ln, i) => rich(ln, W / 2, y0 + i * lh, { size, alpha: a }));
+        }
+        // the end card is the same in every film whatever brand says (pm.js outro)
+        function endCard(lt, sc) {
+          const b = prog(lt, sc.endT ?? sc.dur - 3.0, .7);
+          rect(80, 969, 920 * b, 2, { r: 1, fill: COL.faint });
+          text(`本视频由开源工具 ${TOOL} 生成`, W / 2, 1018, { size: 26, color: COL.dim, alpha: b });
+          const star = '★ Star', bh = 64, by = 1060;
+          X.font = FONT.cn(32, 800); const wl = X.measureText(star).width + 48;
+          X.font = FONT.mono(30, 700); const wr = X.measureText(REPO).width + 48, bx = W / 2 - (wl + wr) / 2;
+          rect(bx, by, wl + wr, bh, { r: 12, fill: '#2A2A31', alpha: b });
+          rect(bx + wl, by, wr, bh, { r: [0, 12, 12, 0], fill: COL.acc, alpha: b });
+          rich([[star, COL.fg]], bx + wl / 2, by + bh / 2 + 1, { size: 32, weight: 800, alpha: b });
+          rich([[REPO, '#111']], bx + wl + wr / 2, by + bh / 2 + 1, { size: 30, weight: 700, font: 'mono', alpha: b });
+        }
+        const sceneAt = t => { const s = T.scenes; for (let i = s.length - 1; i >= 0; i--) if (t >= s[i].t0) return s[i]; return s[0]; };
+        function draw(t) {
+          t = clamp(t, 0, T.total - 1e-3);
+          const sc = sceneAt(t), lt = t - sc.t0;
+          X.setTransform(1, 0, 0, 1, 0, 0); X.clearRect(0, 0, W, H);
+          const fade = clamp(lt / .35) * clamp((sc.dur - lt) / .3);
+          if (sc.builtin === 'outro') withA(fade, () => endCard(lt, sc));
+          else { withA(fade, () => header(sc, 1)); brandMark(W - HEAD[0], HEAD[1], 26, .9); }
+          caption(sc, lt);
+        }
+        window.VP_CHROME_DRAW = draw;   // the VividPaper player's self-check calls it directly
+        // canvas setup is async (fonts); the runtime waits on this before the first frame (HyperFrames buildReady)
+        const ready = document.fonts.load('600 42px "VP Sans"', '本视频由开源工具生成').catch(e => console.warn('VP Sans 没加载上', e));
+        window.__hf = window.__hf || {}; window.__hf.buildReady = window.__hf.buildReady || {};
+        window.__hf.buildReady.vpchrome = ready;
+        // driven by a GSAP tween so the HyperFrames runtime seeks it like any scene (preview, render, check, snapshot)
+        const st = { t: 0 }, tl = gsap.timeline({ paused: true });
+        tl.fromTo(st, { t: 0 }, { t: T.total, duration: T.total, ease: 'none', onUpdate: () => draw(st.t) }, 0);
+        window.addEventListener('hf-seek', e => draw(e.detail.time));
+        ready.then(() => draw(st.t));
+        window.__timelines['vpchrome'] = tl;
+      })();
+    </script>
+  </div>
+</template>

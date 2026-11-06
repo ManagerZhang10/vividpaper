@@ -1,0 +1,234 @@
+<!doctype html>
+<html lang="zh-CN"><head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>__TITLE__</title>
+<meta name="generator" content="VividPaper · https://github.com/ManagerZhang10/vividpaper">
+<style>
+/* same shell as engine/player.html; the stage holds the HyperFrames composition in an iframe instead of a canvas */
+:root{--bg:#070709;--fg:#F4F3EF;--dim:#8A8A92;--line:#26262C;--acc:#FF6A2C;--ar:.75;
+  --w:min(calc((100vh - 150px)*var(--ar)),calc(100vw - 32px));--h:calc(var(--w)/var(--ar))}
+*{box-sizing:border-box}
+html,body{margin:0;background:var(--bg);color:var(--fg);font:14px -apple-system,"PingFang SC","Microsoft YaHei",sans-serif}
+#app{display:flex;flex-direction:column;align-items:center;gap:12px;padding:16px;min-height:100vh}
+#main{display:flex;flex-direction:column;gap:12px;width:var(--w)}
+#side{display:flex;flex-direction:column;gap:12px;width:var(--w)}
+#top{display:flex;justify-content:space-between;align-items:baseline;gap:12px;color:var(--dim)}
+#pm-title{color:var(--fg);font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+#top b{color:var(--fg);white-space:nowrap}#top b::before{content:"";display:inline-block;width:10px;height:10px;border-radius:3px;background:var(--acc);margin-right:6px}
+#stage{position:relative;width:var(--w);height:var(--h);overflow:hidden;border-radius:14px;background:#0B0B0E}
+#vp-frame{position:absolute;left:0;top:0;width:1080px;height:1440px;border:0;transform-origin:0 0;pointer-events:none;background:#0B0B0E}
+#vp-hit{position:absolute;inset:0;cursor:pointer}
+#pm-big{position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);width:96px;height:96px;border-radius:50%;border:0;
+  background:rgba(255,106,44,.92);color:#111;font-size:38px;padding-left:8px;cursor:pointer;box-shadow:0 8px 40px rgba(0,0,0,.5)}
+#ctrl{display:flex;align-items:center;gap:8px}
+button{background:#18181D;color:var(--fg);border:1px solid #2E2E36;border-radius:8px;padding:6px 10px;font:inherit;cursor:pointer}
+button.on{border-color:var(--acc);color:var(--acc)}
+#pm-play{width:44px;flex:none}
+#pm-bar{position:relative;flex:1;min-width:60px;height:28px;cursor:pointer;touch-action:none}
+#pm-bar::before{content:"";position:absolute;left:0;right:0;top:12px;height:4px;background:var(--line);border-radius:2px}
+#pm-fill{position:absolute;left:0;top:12px;height:4px;background:var(--acc);border-radius:2px}
+#pm-ticks i{position:absolute;top:8px;width:2px;height:12px;background:#55555E}
+#pm-time{font:600 13px ui-monospace,Menlo,monospace;color:var(--dim);white-space:nowrap}
+#pm-chaps{display:flex;flex-wrap:wrap;gap:6px}
+.chap{font-size:13px;color:#BDBDC4;text-align:left}.chap span{color:var(--acc);font-weight:700;margin-right:6px}
+#foot{color:#55555E;font-size:12px;line-height:1.7}#foot a{color:var(--dim);text-decoration:none}#foot a:hover{color:var(--acc);text-decoration:underline}
+@media (min-width:1000px) and (min-aspect-ratio:1/1){
+  :root{--w:min(calc((100vh - 110px)*var(--ar)),calc(100vw - 420px))}
+  #app{flex-direction:row;justify-content:center;align-items:flex-start;gap:24px}
+  #side{width:340px;padding-top:34px}#pm-chaps{flex-direction:column}.chap{padding:9px 12px;font-size:14px}
+}
+body.still #app{padding:0;display:block}body.still #side,body.still #top,body.still #ctrl{display:none}
+body.still #stage{width:1080px;height:1440px;border-radius:0}body.still #pm-big{display:none}
+</style></head><body>
+<div id="app">
+ <div id="main">
+  <div id="top"><span id="pm-title"></span><b id="pm-brand">VividPaper</b></div>
+  <div id="stage"><iframe id="vp-frame" title="film"></iframe><div id="vp-hit"></div><button id="pm-big" aria-label="播放">▶</button></div>
+  <div id="ctrl">
+    <button id="pm-play" aria-label="播放/暂停">▶</button>
+    <div id="pm-bar"><div id="pm-ticks"></div><div id="pm-fill"></div></div>
+    <span id="pm-time">0:00 / 0:00</span>
+    <button class="spd on" data-s="1">1×</button><button class="spd" data-s="2">2×</button><button class="spd" data-s="4">4×</button><button id="pm-snd" aria-label="声音开关" style="display:none">🔊</button>
+  </div>
+ </div>
+ <div id="side">
+  <div id="pm-chaps"></div>
+  <div id="foot"><span id="pm-credit"></span>VividPaper · <a href="https://github.com/ManagerZhang10/vividpaper" target="_blank" rel="noopener">★ github.com/ManagerZhang10/vividpaper</a><br><span id="pm-keys">空格 播放/暂停 · ←/→ 跳 5 秒 · 1/2/4 切倍速</span></div>
+ </div>
+</div>
+<script>/*__DATA__*/</script>
+<script>
+// VividPaper player around a HyperFrames composition. The composition (bundled to one HTML by HyperFrames' own compiler)
+// runs in the iframe; this page owns the clock exactly as pm.js does (voice track = clock, else frame time × speed) and
+// on every frame calls the HyperFrames runtime's seek. Captions, header, brand and end card are drawn inside the
+// composition by the vp-chrome layer, so the page and `hyperframes render` show the same picture.
+const VPP = (() => {
+  const T = window.VP_TIMING, TOOL = 'VividPaper', BRAND = T.brand || TOOL;
+  const $ = id => document.getElementById(id), clamp = (v, a = 0, b = 1) => Math.min(b, Math.max(a, v));
+  const fmt = s => `${Math.floor(s / 60)}:${String(Math.floor(s % 60)).padStart(2, '0')}`;
+  const sceneAt = t => { const s = T.scenes; for (let i = s.length - 1; i >= 0; i--) if (t >= s[i].t0) return s[i]; return s[0]; };
+  let P = null, W = null;
+  const sleep = ms => new Promise(r => setTimeout(r, ms));
+  async function mount() {
+    const fr = $('vp-frame'), loaded = new Promise(r => fr.addEventListener('load', r, { once: true }));
+    fr.srcdoc = window.VP_COMP; await loaded; W = fr.contentWindow;
+    // scenes build their timelines after their font loads; wait for the runtime and every timeline
+    const ids = ['vpchrome', ...T.scenes.filter(s => !s.builtin).map(s => s.id)];
+    for (let i = 0; i < 600; i++) {
+      if (W.__playerReady && W.__player && ids.every(id => W.__timelines && W.__timelines[id])) break;
+      await sleep(25);
+    }
+    if (!W.__player) throw new Error('HyperFrames 运行时没有启动');
+    const missing = ids.filter(id => !(W.__timelines || {})[id]); if (missing.length) throw new Error('这几幕没有注册时间线：' + missing.join(', '));
+    await Promise.all(Object.values((W.__hf || {}).buildReady || {}));
+    await W.document.fonts.ready;
+    P = W.__player; P.pause();
+  }
+  const render = t => P.seek(clamp(t, 0, T.total - 1e-3));   // the runtime snaps seeks to the film's frame grid (30 fps unless the root sets data-fps)
+  function fit() { $('vp-frame').style.transform = `scale(${$('stage').clientWidth / 1080})`; }
+
+  // voice: every clip mixed into one track at its place on the timeline (pm.js voiceTrack, without the music mix)
+  async function voiceTrack() {
+    const V = window.PM_VOICE, items = (T.voice || []).map(v => ({ ...v, clip: V && V.clips[v.say] })).filter(v => v.clip);
+    if (!items.length) return null;
+    const rate = 24000, ac = new OfflineAudioContext(1, 1, rate), out = new Float32Array(Math.ceil(T.total * rate));
+    for (const v of items) {
+      const bytes = Uint8Array.from(atob(v.clip.src.split(',')[1]), c => c.charCodeAt(0)), a = await ac.decodeAudioData(bytes.buffer), d = a.getChannelData(0), at = Math.round(v.t * rate);
+      for (let i = 0; i < d.length && at + i < out.length; i++) out[at + i] += d[i];
+    }
+    const b = new DataView(new ArrayBuffer(44 + out.length * 2)), str = (o, s) => [...s].forEach((c, i) => b.setUint8(o + i, c.charCodeAt(0)));
+    str(0, 'RIFF'); b.setUint32(4, 36 + out.length * 2, true); str(8, 'WAVEfmt '); b.setUint32(16, 16, true); b.setUint16(20, 1, true); b.setUint16(22, 1, true);
+    b.setUint32(24, rate, true); b.setUint32(28, rate * 2, true); b.setUint16(32, 2, true); b.setUint16(34, 16, true); str(36, 'data'); b.setUint32(40, out.length * 2, true);
+    out.forEach((v, i) => b.setInt16(44 + i * 2, clamp(v, -1, 1) * 32767, true));
+    return { url: URL.createObjectURL(new Blob([b], { type: 'audio/wav' })) };
+  }
+
+  // the controls: pm.js player(), with render(t) = seek the HyperFrames timeline
+  function player(track) {
+    let t = 0, playing = false, last = 0, speed = 1;
+    const A = track ? new Audio(track.url) : null; let sound = !!A, blocked = false;
+    const audible = () => A && sound && speed <= 2 && !blocked;
+    function syncAudio() {
+      if (!A) return;
+      if (playing && audible()) { A.playbackRate = speed; if (Math.abs(A.currentTime - t) > .25) A.currentTime = t; if (A.paused) A.play().catch(() => { blocked = true; }); }
+      else if (!A.paused) A.pause();
+    }
+    if (A) { $('pm-snd').style.display = ''; $('pm-snd').onclick = () => { sound = !sound; $('pm-snd').textContent = sound ? '🔊' : '🔇'; syncAudio(); }; $('pm-keys').textContent += ' · M 开关声音'; }
+    $('pm-title').textContent = (T.paper && T.paper.title) || '';
+    $('pm-brand').textContent = BRAND; if (BRAND !== TOOL) $('pm-credit').textContent = BRAND + ' · ';
+    T.scenes.filter(s => !s.builtin).forEach(sc => {
+      const b = document.createElement('button'); b.className = 'chap'; b.dataset.id = sc.id;
+      b.innerHTML = `<span>${String(sc.num).padStart(2, '0')}</span>${sc.name}`; b.onclick = () => seek(sc.t0 + .01);
+      $('pm-chaps').appendChild(b);
+      const k = document.createElement('i'); k.style.left = (sc.t0 / T.total * 100) + '%'; $('pm-ticks').appendChild(k);
+    });
+    const seek = s => { t = clamp(s, 0, T.total); if (A) A.currentTime = t; draw(); };
+    function draw() {
+      render(t);
+      $('pm-time').textContent = `${fmt(t)} / ${fmt(T.total)}`;
+      $('pm-fill').style.width = (t / T.total * 100) + '%';
+      const cur = sceneAt(t).id; document.querySelectorAll('.chap').forEach(b => b.classList.toggle('on', b.dataset.id === cur));
+    }
+    function loop(ts) {
+      if (playing) {
+        if (audible() && !A.paused && A.currentTime > 0) t = A.currentTime; else if (last) t += (ts - last) / 1000 * speed;
+        last = ts; if (t >= T.total) { t = T.total; setPlay(false); }
+        syncAudio(); draw();
+      }
+      requestAnimationFrame(loop);
+    }
+    function setPlay(v) { playing = v; last = 0; blocked = false; if (v && t >= T.total - .05) t = 0; $('pm-play').textContent = v ? '❚❚' : '▶'; $('pm-big').style.display = v ? 'none' : ''; syncAudio(); }
+    const toggle = () => setPlay(!playing);
+    $('pm-play').onclick = toggle; $('pm-big').onclick = toggle; $('vp-hit').onclick = toggle;
+    document.querySelectorAll('.spd').forEach(b => b.onclick = () => { speed = +b.dataset.s; document.querySelectorAll('.spd').forEach(x => x.classList.toggle('on', x === b)); syncAudio(); });
+    const bar = $('pm-bar'), scrub = e => { const r = bar.getBoundingClientRect(); seek((e.clientX - r.left) / r.width * T.total); };
+    bar.onpointerdown = e => { bar.setPointerCapture(e.pointerId); scrub(e); bar.onpointermove = scrub; };
+    bar.onpointerup = () => { bar.onpointermove = null; };
+    addEventListener('keydown', e => {
+      if (e.code === 'Space') { e.preventDefault(); toggle(); }
+      else if (e.code === 'ArrowLeft') seek(t - 5); else if (e.code === 'ArrowRight') seek(t + 5);
+      else if (['1', '2', '4'].includes(e.key)) document.querySelector(`.spd[data-s="${e.key}"]`).click();
+      else if (A && e.key.toLowerCase() === 'm') $('pm-snd').click();
+    });
+    const q = new URLSearchParams(location.search); if (q.has('t')) t = +q.get('t');
+    draw(); requestAnimationFrame(loop);
+    return { seek, get t() { return t; }, setPlay, setSpeed: s => document.querySelector(`.spd[data-s="${s}"]`).click() };
+  }
+
+  // ---------- self-check (?audit): pm.js runAudit's kinds and thresholds, measured on the composition's DOM ----------
+  // No screenshots: text boxes come from getBoundingClientRect inside the iframe, "did the picture change" from a
+  // fingerprint of every visible element (box, opacity, transform, colours, svg geometry). vp_hf_check.py reads the result.
+  function audit(q) {
+    const D = W.document, warns = [], seen = new Set(), cur = { t: 0, sc: '' };
+    const warn = (kind, msg) => { const k = kind + cur.sc + msg; if (seen.has(k)) return; seen.add(k); warns.push({ t: +cur.t.toFixed(2), scene: cur.sc, kind, msg }); };
+    const SAFE = [20, 16, 1060, 1424], BOTTOM = 1190;
+    const alpha = el => { let a = 1; for (let e = el; e && e.nodeType === 1; e = e.parentElement) { const cs = W.getComputedStyle(e); if (cs.display === 'none' || cs.visibility === 'hidden') return 0; a *= +cs.opacity; } return a; };
+    const host = sc => D.getElementById(sc.id);
+    const textEls = h => [...h.querySelectorAll('*')].filter(e => [...e.childNodes].some(n => n.nodeType === 3 && n.textContent.trim()));
+    const fp = h => [...h.querySelectorAll('*')].map(e => {
+      const a = alpha(e); if (a < .02) return '';
+      const r = e.getBoundingClientRect(), cs = W.getComputedStyle(e);
+      return [e.tagName, Math.round(r.x), Math.round(r.y), Math.round(r.width), Math.round(r.height), a.toFixed(2), cs.transform, cs.strokeDashoffset,
+        cs.fill, cs.stroke, cs.backgroundColor, cs.borderTopColor, e.getAttribute('cx'), e.getAttribute('cy'), e.getAttribute('r')].join(',');
+    }).join('|');
+    const at = t => { render(t); return t; };
+    const scenes = T.scenes.filter(s => !s.builtin);
+    // 这句画面不动 / 画面静止 (pm.js: compare line start + .25 with line end − .1; a 6 s stretch with no change)
+    scenes.forEach(sc => {
+      cur.sc = sc.id; const h = host(sc); if (!h) { warn('报错', `合成里找不到这一幕：${sc.id}`); return; }
+      sc.lines.forEach((l, i) => { cur.t = sc.t0 + l.t0; at(sc.t0 + l.t0 + .25); const a = fp(h); at(sc.t0 + l.t1 - .1); if (a === fp(h)) warn('这句画面不动', `第 ${i + 1} 句「${l.text.replace(/\*\*/g, '').slice(0, 14)}…」从头到尾画面没变化`); });
+      at(sc.t0 + .5); let prev = fp(h), run = 0, from = sc.t0 + .5;
+      for (let t = sc.t0 + 1; t < sc.t0 + sc.dur - .4; t += .5) {
+        at(t); const d = fp(h);
+        if (d === prev) run += .5; else { if (run >= 6) { cur.t = from; warn('画面静止', `${from.toFixed(1)}s 起 ${run.toFixed(1)}s 没有动`); } run = 0; from = t; }
+        prev = d;
+      }
+      if (run >= 6) { cur.t = from; warn('画面静止', `${from.toFixed(1)}s 起 ${run.toFixed(1)}s 没有动（到本幕结束）`); }
+    });
+    // 出界 / 字太小 / 压字幕 / 文字重叠, every 0.25 s
+    const ov = {};
+    for (let t = 0; t < T.total; t += .25) {
+      at(t); const sc = sceneAt(t); cur.t = t; cur.sc = sc.id; if (sc.builtin) continue;
+      const lt = t - sc.t0, capOn = sc.lines.some(l => lt >= l.t0 && lt < l.t1), items = [], nowOv = new Set();
+      textEls(host(sc)).forEach(e => {
+        const a = alpha(e); if (a <= .05) return;
+        const r = e.getBoundingClientRect(), s = e.textContent.trim(), size = parseFloat(W.getComputedStyle(e).fontSize);
+        if (r.left < SAFE[0] || r.right > SAFE[2] || r.top < SAFE[1] || r.bottom > SAFE[3]) warn('出界', `「${s.slice(0, 16)}」超出画面`);
+        if (size < 22) warn('字太小', `「${s.slice(0, 16)}」只有 ${size}px`);
+        if (capOn && r.bottom > BOTTOM + 20) warn('压字幕', `「${s.slice(0, 12)}」伸进字幕区（y>${BOTTOM}）`);
+        if (a > .9) items.push({ s, r });
+      });
+      for (let i = 0; i < items.length; i++) for (let j = i + 1; j < items.length; j++) {
+        const A = items[i], B = items[j], ix = Math.min(A.r.right, B.r.right) - Math.max(A.r.left, B.r.left), iy = Math.min(A.r.bottom, B.r.bottom) - Math.max(A.r.top, B.r.top);
+        if (ix > 4 && iy > 4 && A.s !== B.s && !A.s.includes(B.s) && !B.s.includes(A.s) && ix * iy > .3 * Math.min(A.r.width * A.r.height, B.r.width * B.r.height)) {
+          const k = A.s + '|' + B.s; nowOv.add(k); ov[k] = (ov[k] || 0) + 1; if (ov[k] >= 4) warn('文字重叠', `「${A.s.slice(0, 10)}」和「${B.s.slice(0, 10)}」叠在一起`);
+        }
+      }
+      for (const k in ov) if (!nowOv.has(k)) delete ov[k];
+    }
+    (W.VP_CHROME_WARN || []).forEach(w => { cur.sc = w.scene; warn(w.kind, w.msg); });
+    // contact sheet times: the moment each caption line finishes (pm.js), captured by `hyperframes snapshot`
+    const shots = [];
+    T.scenes.forEach(sc => { if (sc.builtin) shots.push([+(sc.t0 + sc.dur - .4).toFixed(2), '片尾']); else sc.lines.forEach((l, i) => shots.push([+(sc.t0 + l.t1 - .25).toFixed(2), `${String(sc.num).padStart(2, '0')}·${i + 1}`])); });
+    const pre = document.createElement('pre'); pre.id = 'vp-audit'; pre.textContent = JSON.stringify({ total: T.total, warnings: warns, shots }); document.body.appendChild(pre);
+  }
+
+  async function boot() {
+    document.documentElement.style.setProperty('--ar', 1080 / 1440);
+    const q = new URLSearchParams(location.search);
+    if (q.has('still') || q.has('audit')) document.body.className = 'still';
+    fit(); addEventListener('resize', fit);
+    await mount();
+    if (q.has('audit')) return audit(q);
+    if (q.has('still')) { render(+q.get('t') || 0); document.title = 'READY'; return; }
+    let track = null;
+    try { track = await voiceTrack(); } catch (e) { console.error('配音音轨合成失败，改为无声播放', e); }
+    window.VP_PLAYER = player(track);
+    window.VP_READY = true;
+  }
+  return { boot };
+})();
+VPP.boot().catch(e => { document.body.insertAdjacentHTML('beforeend', '<pre style="color:#FF4B4B;padding:16px">' + e.message + '</pre>'); console.error(e); });
+</script>
+</body></html>

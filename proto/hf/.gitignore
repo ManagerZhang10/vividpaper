@@ -1,0 +1,12 @@
+# written by vp_hf.py on every build (sources: film.json, compositions/<scene>.html, assets/film-lib.js, assets/figures/)
+*/index.html
+*/assets/vp/
+*/assets/vendor/
+*/assets/fonts/
+*/assets/voice/
+*/compositions/vp-chrome.html
+# written by hyperframes check / snapshot / render
+*/.hyperframes/
+*/renders/
+# the rendered video stays out of git
+out/*.mp4
