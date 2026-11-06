@@ -8,3 +8,12 @@ examples/*/source/*
 __pycache__/
 _frames/
 _grid/
+
+# standard engine (HyperFrames): dependencies, and what build.py / hyperframes write into a film directory
+node_modules/
+.hyperframes/
+renders/
+tests/*/index.html
+tests/*/*.html
+tests/*/*.mp4
+tests/*/*_sheet.png

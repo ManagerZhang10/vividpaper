@@ -1,4 +1,4 @@
-<!-- 第 2 幕 · 新办法：每个词直接看所有词 -->
+<!-- 第 2 幕 · 新办法：每个词直接看所有词（标准版回归样例：论文原图用 .vp-figure 放，出处写在 .vp-source 里） -->
 <template>
   <style>
     #root { position: absolute; inset: 0; }
@@ -8,19 +8,20 @@
       font-size: 38px; font-weight: 700; display: flex; align-items: center; justify-content: center; white-space: nowrap; }
     #self-stage .lbl { position: absolute; white-space: nowrap; font-weight: 600; }
     #self-stage .core { position: absolute; width: 72px; height: 72px; border-radius: 10px; background: #FF6A2C; }
-    #self-fig { position: absolute; left: 132px; top: 672px; width: 816px; padding: 18px; background: #fff; border-radius: 16px; }
-    #self-fig img { display: block; width: 780px; height: auto; }
+    #self-fig { left: 132px; top: 672px; width: 816px; }
+    #self-fig > img { padding: 18px; border-radius: 16px; }
+    #self-fig > .vp-source { top: auto; bottom: 100%; margin: 0 0 8px; }   /* the source above the card: below it is the caption band */
   </style>
   <div id="root" data-composition-id="self" data-width="1080" data-height="1440">
     <div id="self-stage">
       <svg id="self-svg" width="1080" height="1440" viewBox="0 0 1080 1440"></svg>
-      <div id="self-fig"><img id="self-fig-img" src="assets/figures/fig4_its.png" alt="论文 Figure 4"></div>
+      <figure id="self-fig" class="vp-figure"><img id="self-fig-img" src="assets/figures/fig4_its.png" alt="论文 Figure 4"><figcaption class="vp-source">图：论文 Figure 4（第 5 层的两个注意力头）</figcaption></figure>
       <svg id="self-svg-top" width="1080" height="1440" viewBox="0 0 1080 1440"></svg>
     </div>
     <script>
       (async () => {
-        const S = window.VP.scene('self'), { L } = S, F = window.FILM, C = F.COL;
-        await document.fonts.load('700 38px "VP Sans"', 'The Law will').catch(e => console.warn('VP Sans 没加载上', e));
+        const S = VP.scene('self'), { L } = S, F = window.FILM, C = F.COL;
+        await VP.fontsReady;
         const stage = document.getElementById('self-stage'), svg = document.getElementById('self-svg'), top = document.getElementById('self-svg-top');
         const tl = gsap.timeline({ paused: true });
         // the sentence; the second row eases 40 px further down to make room for the lines
@@ -55,9 +56,6 @@
           tl.fromTo(lab, { opacity: 0 }, { opacity: 1, duration: .3 }, L(2) + d + .3);
           figParts.push(m, lab);
         });
-        const note = F.label(stage, 'self-note', '图：论文 Figure 4（第 5 层的两个注意力头）', 930, 650, { size: 22, color: C.dim, align: 'right' });
-        tl.fromTo(note, { opacity: 0 }, { opacity: 1, duration: .4 }, L(2));
-        figParts.push(note);
         tl.to(figParts, { opacity: 0, duration: .35 }, L(3) - .15);
         // everyone looks at everyone at once (line 4)
         for (let i = 0; i < 13; i++) for (let j = i + 1; j < 13; j++) {

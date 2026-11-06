@@ -1,7 +1,11 @@
 #!/usr/bin/env python3
 """Pack film.js + figures/ + the engine into one self-contained HTML file.
 
-    build.py <film dir> [-o out.html] [--open] [--mute] [--bgm music.mp3 [--bgm-drop auto|SECONDS]]
+    build.py <film dir> [-o out.html] [--open] [--mute] [--bgm music.mp3 [--bgm-drop auto|SECONDS]] [--mp4]
+
+Two engines, picked from what the film directory holds (no flag): film.js → the Flash engine (pm.js on a canvas; Python and
+Chrome only, this file); film.json → the standard engine (HyperFrames draws the picture; needs Node, see standard.py, which
+is only imported for such a directory). --mp4 (standard only) also renders <name>.mp4.
 
 <film dir> must contain film.js; every image in <film dir>/figures/ is embedded and
 available in draw() as g.img('<file name without extension>', ...).
@@ -15,6 +19,14 @@ import argparse, base64, json, mimetypes, re, subprocess, sys
 from pathlib import Path
 
 ENGINE = Path(__file__).resolve().parent.parent / "engine"
+
+
+def engine_of(d):
+    """'standard' when the film directory holds film.json (a HyperFrames project), else 'flash' (film.js)."""
+    d = Path(d)
+    if (d / "film.json").exists() and (d / "film.js").exists():
+        sys.exit(f"{d} 里 film.js 和 film.json 都有：Flash 版只留 film.js，标准版只留 film.json")
+    return "standard" if (d / "film.json").exists() else "flash"
 
 
 def voice_clips(d):
@@ -76,9 +88,17 @@ def main():
     ap.add_argument("--mute", action="store_true", help="不打包 voice/ 里的配音")
     ap.add_argument("--bgm", help="配乐文件（仓库不带配乐，用自己的）；播放时垫在配音下面，念的时候自动压低")
     ap.add_argument("--bgm-drop", default="auto", help="配乐进拍在第几秒，对齐到片子第 0.3 秒；auto = 在 15 秒附近找响度突增处，0 = 从头放")
+    ap.add_argument("--mp4", action="store_true", help="标准版：同时用 HyperFrames 渲染出 <短名>.mp4（音轨和页面里听到的一样）")
     a = ap.parse_args()
 
     d = Path(a.dir)
+    if engine_of(d) == "standard":
+        sys.path.insert(0, str(Path(__file__).resolve().parent))
+        import standard
+        standard.build(d, a.out, voice=not a.mute, bgm=a.bgm, bgm_drop=a.bgm_drop, mp4=a.mp4, open_page=a.open)
+        return
+    if a.mp4:
+        sys.exit("--mp4 只有标准版（film.json）支持；Flash 版出的是网页")
     html, n, vo = pack(d, voice=not a.mute, bgm=a.bgm, bgm_drop=a.bgm_drop)
     out = Path(a.out or d / f"{d.name}.html")
     out.write_text(html, encoding="utf-8")

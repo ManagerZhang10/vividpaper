@@ -4,7 +4,7 @@
     voice.py <film dir> [--voice zh-CN-YunxiNeural] [--rate +30%] [--force]
     voice.py <film dir> --cmd 'my_tts --text {text} --out {out}'
 
-Writes <film dir>/voice/: one audio file per spoken line + voice.json (text → file, clip length,
+Works for both engines (film.js or film.json). Writes <film dir>/voice/: one audio file per spoken line + voice.json (text → file, clip length,
 where the speech ends). build.py embeds them; each caption then lasts as long as its line takes
 to say, and everything hung on g.L(i) moves with it. Also read aloud: the opening question and
 the recap. Only new or changed lines are synthesized; files no longer used are removed.
@@ -17,7 +17,7 @@ import argparse, array, asyncio, hashlib, html, json, re, shlex, subprocess, sys
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-from build import pack     # noqa: E402
+from build import pack, engine_of     # noqa: E402
 from check import chrome   # noqa: E402
 
 
@@ -104,7 +104,11 @@ def main():
     vd = d / "voice"
     vd.mkdir(exist_ok=True)
     engine = f"cmd:{a.cmd}" if a.cmd else f"edge:{a.voice}:{a.rate}"
-    lines = script(d)
+    if engine_of(d) == "standard":   # film.json: the lines are read straight from it (standard.py), no browser needed
+        import standard
+        lines = standard.voice_script(d)
+    else:
+        lines = script(d)
     says = list(dict.fromkeys(x["say"] for x in lines))
     mf = vd / "voice.json"
     old = {c["file"]: c for c in json.loads(mf.read_text(encoding="utf-8"))["clips"].values()} if mf.exists() and not a.force else {}

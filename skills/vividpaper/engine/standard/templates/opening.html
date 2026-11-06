@@ -1,0 +1,55 @@
+<!-- VividPaper 标准版 · 片头模板（可选，不强制）。复制成 compositions/opening.html 后随意改，film.json 里配一幕：
+       { "id": "opening", "name": "片头", "chapter": false, "lead": 0, "badges": [...], "points": [...],
+         "lines": ["问题（**强调**）", "今天解读<机构 会议>的论文 <方法名>", "为什么值得读：具体的结果或落地"] }
+     三句的顺序：问题 → 出处 → 为什么值得读。第 0 秒就开口、出字幕。#opening-hero 是主图区，换成这篇论文的核心机制，
+     第 0 秒就要动（自查会比较第 0 秒和第 0.6 秒）。版面按 VP.layout 排，3:4、9:16、16:9 都能用。 -->
+<template>
+  <style>
+    #root { position: absolute; inset: 0; }
+    #op-stage { position: absolute; inset: 0; font-family: "VP Sans", sans-serif; color: #F4F3EF; }
+    #op-stage .op-full { position: absolute; font-size: 26px; font-weight: 400; color: #8A8A92; white-space: nowrap; }
+    #op-stage .op-q { position: absolute; font-size: 64px; font-weight: 700; line-height: 1.3; }
+    #op-stage .op-q b { color: #FF6A2C; }
+    #op-stage .op-chip { position: absolute; font-size: 30px; font-weight: 700; padding: 6px 18px; border-radius: 26px;
+      border: 2px solid rgba(255,106,44,.5); background: rgba(255,106,44,.16); white-space: nowrap; }
+    #op-stage .op-chip.solid { background: #FF6A2C; border-color: #FF6A2C; color: #111; }
+    #op-hero { position: absolute; overflow: visible; }
+  </style>
+  <div id="root" data-composition-id="opening">
+    <div id="op-stage">
+      <svg id="op-hero"></svg>
+    </div>
+    <script>
+      (async () => {
+        await VP.fontsReady;
+        const S = VP.scene('opening'), { L } = S, Y = VP.layout, P = VP.timing.paper || {};
+        const [sx0, sy0, sx1] = Y.safe, top = Y.zone.top, w = sx1 - sx0 - 120, x0 = sx0 + 60;
+        const stage = document.getElementById('op-stage'), tl = gsap.timeline({ paused: true });
+        const el = (cls, html, css) => { const e = document.createElement('div'); e.className = cls; e.innerHTML = html; Object.assign(e.style, css); stage.appendChild(e); return e; };
+        const md = s => String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/\*\*([^*]+)\*\*/g, '<b>$1</b>');
+        el('op-full', md(P.full || P.title || ''), { left: `${x0}px`, top: `${top}px`, maxWidth: `${w}px`, overflow: 'hidden', textOverflow: 'ellipsis' });
+        const q = el('op-q', md(S.lines[0] ? S.lines[0].text : ''), { left: `${x0}px`, top: `${top + 60}px`, width: `${w}px` });
+        // the hero: replace this with the paper's own mechanism, moving from frame 0 (here: a line drawn under the question)
+        const hy = top + 60 + q.offsetHeight + 60, hh = Y.zone.bottom - 120 - hy, hero = document.getElementById('op-hero');
+        Object.assign(hero.style, { left: `${x0}px`, top: `${hy}px` }); hero.setAttribute('width', w); hero.setAttribute('height', Math.max(hh, 60));
+        const NS = 'http://www.w3.org/2000/svg', ln = document.createElementNS(NS, 'path');
+        ln.setAttribute('d', `M0,${Math.max(hh, 60) / 2} L${w},${Math.max(hh, 60) / 2}`); ln.setAttribute('stroke', '#FF6A2C'); ln.setAttribute('stroke-width', 6); ln.setAttribute('fill', 'none');
+        ln.style.strokeDasharray = `${w} ${w}`; hero.appendChild(ln);
+        tl.fromTo(ln, { strokeDashoffset: w }, { strokeDashoffset: 0, duration: Math.max(1.2, S.lines[0] ? S.Le(0) - .3 : 2), ease: 'none' }, 0);
+        const dot = document.createElementNS(NS, 'circle'); dot.setAttribute('r', 12); dot.setAttribute('cx', 0); dot.setAttribute('fill', '#FF6A2C'); dot.setAttribute('cy', Math.max(hh, 60) / 2); hero.appendChild(dot);
+        tl.fromTo(dot, { attr: { cx: 0 } }, { attr: { cx: w }, duration: Math.max(1, S.dur - S.Le(0)), ease: 'none' }, S.lines[0] ? S.Le(0) - .3 : 2);
+        // line 2 (出处): badges; line 3 (为什么值得读): points. Edit the arrays in film.json (badges / points) or here.
+        const row = (items, y, at, solidLast) => {
+          let x = x0; items.forEach((s, i) => {
+            const c = el('op-chip' + (solidLast && i === items.length - 1 ? ' solid' : ''), md(s), { left: `${x}px`, top: `${y}px` });
+            x += c.offsetWidth + 16; tl.fromTo(c, { opacity: 0, y: 12 }, { opacity: 1, y: 0, duration: .35 }, at + i * .35);
+          });
+        };
+        if (S.lines[1]) row(S.badges || [], Y.zone.bottom - 190, L(1) + .3, true);
+        if (S.lines[2]) row(S.points || [], Y.zone.bottom - 100, L(2) + .3, false);
+        tl.to(stage, { opacity: 0, duration: .3, ease: 'none' }, S.dur - .3);
+        window.__timelines['opening'] = tl;
+      })();
+    </script>
+  </div>
+</template>

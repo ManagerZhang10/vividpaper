@@ -1,5 +1,5 @@
 <!-- 第 1 幕 · 老办法：RNN 只能一个词一个词地传
-     Every action hangs on a caption line: S.L(i) / S.Le(i) come from window.VP_TIMING (vp_hf.py), so with a voice-over
+     Every action hangs on a caption line: S.L(i) / S.Le(i) come from window.VP_TIMING (build.py), so with a voice-over
      the moves follow the voice exactly like g.L(i) in pm.js. -->
 <template>
   <style>
@@ -17,8 +17,8 @@
     </div>
     <script>
       (async () => {
-        const S = window.VP.scene('rnn'), { L } = S, F = window.FILM, C = F.COL;
-        await document.fonts.load('700 38px "VP Sans"', 'The Law will').catch(e => console.warn('VP Sans 没加载上', e));
+        const S = VP.scene('rnn'), { L } = S, F = window.FILM, C = F.COL;
+        await VP.fontsReady;
         const stage = document.getElementById('rnn-stage'), svg = document.getElementById('rnn-svg');
         const tl = gsap.timeline({ paused: true });
         const R = F.sentence(stage, 250, 200, 'rnn');

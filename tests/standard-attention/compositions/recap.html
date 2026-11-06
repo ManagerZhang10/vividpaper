@@ -1,0 +1,44 @@
+<!-- VividPaper 标准版 · 回顾模板（可选，不强制）。复制成 compositions/recap.html 后随意改，film.json 里配一幕：
+       { "id": "recap", "name": "回顾", "chapter": false, "lines": ["我们最后回顾一下", "第一条", "第二条", "第三条"] }
+     第一句是引子，之后每句一条回顾，念到哪条哪条出现。每条右边留了一个小框 #recap-box-<i>（从 1 数），可以画那一幕
+     机制的简化版。片尾的工具署名由引擎在回顾之后自动加，这里不用画。版面按 VP.layout 排，3:4、9:16、16:9 都能用。 -->
+<template>
+  <style>
+    #root { position: absolute; inset: 0; }
+    #rc-stage { position: absolute; inset: 0; font-family: "VP Sans", sans-serif; color: #F4F3EF; }
+    #rc-stage .rc-head { position: absolute; font-size: 34px; font-weight: 700; color: #8A8A92; }
+    #rc-stage .rc-item { position: absolute; display: flex; align-items: center; gap: 28px; }
+    #rc-stage .rc-num { flex: none; width: 60px; height: 60px; border-radius: 50%; background: #FF6A2C; color: #111;
+      font-size: 32px; font-weight: 700; display: flex; align-items: center; justify-content: center; }
+    #rc-stage .rc-text { font-size: 40px; font-weight: 700; line-height: 1.35; }
+    #rc-stage .rc-text b { color: #FF6A2C; }
+    #rc-stage .rc-box { position: absolute; border-radius: 14px; background: #15151A; border: 2px solid #3A3A42; }
+  </style>
+  <div id="root" data-composition-id="recap">
+    <div id="rc-stage"></div>
+    <script>
+      (async () => {
+        await VP.fontsReady;
+        const S = VP.scene('recap'), { L } = S, Y = VP.layout, [sx0, , sx1] = Y.safe, x0 = sx0 + 60;
+        const stage = document.getElementById('rc-stage'), tl = gsap.timeline({ paused: true });
+        const md = s => String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/\*\*([^*]+)\*\*/g, '<b>$1</b>');
+        const head = document.createElement('div'); head.className = 'rc-head'; head.textContent = '最后回顾';
+        Object.assign(head.style, { left: `${x0}px`, top: `${Y.zone.top + 20}px` }); stage.appendChild(head);
+        tl.fromTo(head, { opacity: 0, x: -16 }, { opacity: 1, x: 0, duration: .5 }, S.lines.length ? L(0) + .2 : 0);
+        const n = S.lines.length - 1, gap = Math.min(170, (Y.zone.bottom - Y.zone.top - 160) / Math.max(n, 1)), boxW = Math.min(320, (sx1 - sx0) * .3);
+        for (let i = 1; i <= n; i++) {
+          const y = Y.zone.top + 130 + (i - 1) * gap;
+          const it = document.createElement('div'); it.className = 'rc-item'; it.id = `recap-item-${i}`;
+          it.innerHTML = `<div class="rc-num">${i}</div><div class="rc-text">${md(S.lines[i].text)}</div>`;
+          Object.assign(it.style, { left: `${x0}px`, top: `${y}px`, width: `${sx1 - x0 - boxW - 80}px`, height: '124px' }); stage.appendChild(it);
+          const box = document.createElement('div'); box.className = 'rc-box'; box.id = `recap-box-${i}`;
+          Object.assign(box.style, { left: `${sx1 - 40 - boxW}px`, top: `${y}px`, width: `${boxW}px`, height: '124px' }); stage.appendChild(box);
+          tl.fromTo([it, box], { opacity: 0, x: -16 }, { opacity: 1, x: 0, duration: .5 }, L(i));
+          // a small moving picture of that scene goes in #recap-box-<i>, e.g. tl.fromTo(dot, {...}, {...}, L(i) + .3)
+        }
+        tl.to(stage, { opacity: 0, duration: .3, ease: 'none' }, S.dur - .3);
+        window.__timelines['recap'] = tl;
+      })();
+    </script>
+  </div>
+</template>

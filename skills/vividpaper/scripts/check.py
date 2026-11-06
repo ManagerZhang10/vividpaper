@@ -9,6 +9,10 @@ Writes next to the html:
   <name>_audit.json    timeline + warnings
 Prints the warnings. Exit code 1 when there are any, so you fix them before handing over.
 Kinds: 报错 / 出界 / 字太小 / 压字幕 / 文字重叠 / 字幕太长 / 这句画面不动 / 画面静止 / 开场不动 / 总长 / 配音.
+
+A standard-engine film (its directory holds film.json; the page says <meta name="vividpaper-engine" content="standard">)
+is checked by standard.py instead: the same kinds measured on the page's DOM, plus `hyperframes check`, plus 出处 / 字体.
+Pass the page or the film directory.
 """
 import argparse, base64, html, json, os, re, shutil, subprocess, sys
 from pathlib import Path
@@ -40,6 +44,10 @@ def main():
     a = ap.parse_args()
 
     f = Path(a.html).resolve()
+    if (f.is_dir() and (f / "film.json").exists()) or (f.is_file() and 'name="vividpaper-engine" content="standard"' in f.read_text(encoding="utf-8", errors="ignore")[:4000]):
+        sys.path.insert(0, str(Path(__file__).resolve().parent))
+        import standard
+        return standard.check(f, at=a.at, cols=a.cols)
     url = f.as_uri() + f"?audit=1&cols={a.cols}&at={a.at}"
     r = subprocess.run([chrome(), "--headless=new", "--disable-gpu", "--hide-scrollbars", "--allow-file-access-from-files",
                         "--virtual-time-budget=60000", "--run-all-compositor-stages-before-draw", "--dump-dom", url],

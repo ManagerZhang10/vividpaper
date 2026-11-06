@@ -4,8 +4,9 @@
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>__TITLE__</title>
 <meta name="generator" content="VividPaper · https://github.com/ManagerZhang10/vividpaper">
+<meta name="vividpaper-engine" content="standard">
 <style>
-/* same shell as engine/player.html; the stage holds the HyperFrames composition in an iframe instead of a canvas */
+/* the same shell as engine/player.html (Flash); the stage holds the HyperFrames composition in an iframe instead of a canvas */
 :root{--bg:#070709;--fg:#F4F3EF;--dim:#8A8A92;--line:#26262C;--acc:#FF6A2C;--ar:.75;
   --w:min(calc((100vh - 150px)*var(--ar)),calc(100vw - 32px));--h:calc(var(--w)/var(--ar))}
 *{box-sizing:border-box}
@@ -17,7 +18,7 @@ html,body{margin:0;background:var(--bg);color:var(--fg);font:14px -apple-system,
 #pm-title{color:var(--fg);font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 #top b{color:var(--fg);white-space:nowrap}#top b::before{content:"";display:inline-block;width:10px;height:10px;border-radius:3px;background:var(--acc);margin-right:6px}
 #stage{position:relative;width:var(--w);height:var(--h);overflow:hidden;border-radius:14px;background:#0B0B0E}
-#vp-frame{position:absolute;left:0;top:0;width:1080px;height:1440px;border:0;transform-origin:0 0;pointer-events:none;background:#0B0B0E}
+#vp-frame{position:absolute;left:0;top:0;border:0;transform-origin:0 0;pointer-events:none;background:#0B0B0E}
 #vp-hit{position:absolute;inset:0;cursor:pointer}
 #pm-big{position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);width:96px;height:96px;border-radius:50%;border:0;
   background:rgba(255,106,44,.92);color:#111;font-size:38px;padding-left:8px;cursor:pointer;box-shadow:0 8px 40px rgba(0,0,0,.5)}
@@ -33,13 +34,14 @@ button.on{border-color:var(--acc);color:var(--acc)}
 #pm-chaps{display:flex;flex-wrap:wrap;gap:6px}
 .chap{font-size:13px;color:#BDBDC4;text-align:left}.chap span{color:var(--acc);font-weight:700;margin-right:6px}
 #foot{color:#55555E;font-size:12px;line-height:1.7}#foot a{color:var(--dim);text-decoration:none}#foot a:hover{color:var(--acc);text-decoration:underline}
+@media (max-width:480px){.spd{padding:6px 7px}#pm-time{display:none}}
 @media (min-width:1000px) and (min-aspect-ratio:1/1){
   :root{--w:min(calc((100vh - 110px)*var(--ar)),calc(100vw - 420px))}
   #app{flex-direction:row;justify-content:center;align-items:flex-start;gap:24px}
   #side{width:340px;padding-top:34px}#pm-chaps{flex-direction:column}.chap{padding:9px 12px;font-size:14px}
 }
 body.still #app{padding:0;display:block}body.still #side,body.still #top,body.still #ctrl{display:none}
-body.still #stage{width:1080px;height:1440px;border-radius:0}body.still #pm-big{display:none}
+body.still #stage{border-radius:0}body.still #pm-big{display:none}
 </style></head><body>
 <div id="app">
  <div id="main">
@@ -59,55 +61,100 @@ body.still #stage{width:1080px;height:1440px;border-radius:0}body.still #pm-big{
 </div>
 <script>/*__DATA__*/</script>
 <script>
-// VividPaper player around a HyperFrames composition. The composition (bundled to one HTML by HyperFrames' own compiler)
-// runs in the iframe; this page owns the clock exactly as pm.js does (voice track = clock, else frame time × speed) and
-// on every frame calls the HyperFrames runtime's seek. Captions, header, brand and end card are drawn inside the
-// composition by the vp-chrome layer, so the page and `hyperframes render` show the same picture.
+// VividPaper player around a HyperFrames composition (the standard engine). The composition, bundled to one HTML by
+// HyperFrames' own compiler, runs in the iframe; this page owns the clock exactly as pm.js does (the voice track is the
+// clock, else frame time × speed) and on every frame calls the HyperFrames runtime's seek. Captions, chapter header, brand
+// and end card are drawn inside the composition by the chrome layer, so this page and `hyperframes render` show the same
+// picture. Query strings: ?t=12 start there · ?still&t=12 one bare frame · ?audit the self-check · ?mixdown the audio track.
 const VPP = (() => {
-  const T = window.VP_TIMING, TOOL = 'VividPaper', BRAND = T.brand || TOOL;
+  const T = window.VP_TIMING, LY = T.layout, W = LY.W, H = LY.H, TOOL = 'VividPaper', BRAND = T.brand || TOOL;
   const $ = id => document.getElementById(id), clamp = (v, a = 0, b = 1) => Math.min(b, Math.max(a, v));
   const fmt = s => `${Math.floor(s / 60)}:${String(Math.floor(s % 60)).padStart(2, '0')}`;
   const sceneAt = t => { const s = T.scenes; for (let i = s.length - 1; i >= 0; i--) if (t >= s[i].t0) return s[i]; return s[0]; };
-  let P = null, W = null;
   const sleep = ms => new Promise(r => setTimeout(r, ms));
+  let P = null, Wn = null;
   async function mount() {
     const fr = $('vp-frame'), loaded = new Promise(r => fr.addEventListener('load', r, { once: true }));
-    fr.srcdoc = window.VP_COMP; await loaded; W = fr.contentWindow;
-    // scenes build their timelines after their font loads; wait for the runtime and every timeline
+    fr.style.width = W + 'px'; fr.style.height = H + 'px';
+    fr.srcdoc = window.VP_COMP; await loaded; Wn = fr.contentWindow;
+    // scenes build their timelines after their fonts load; wait for the runtime and every timeline
     const ids = ['vpchrome', ...T.scenes.filter(s => !s.builtin).map(s => s.id)];
-    for (let i = 0; i < 600; i++) {
-      if (W.__playerReady && W.__player && ids.every(id => W.__timelines && W.__timelines[id])) break;
+    for (let i = 0; i < 800; i++) {
+      if (Wn.__playerReady && Wn.__player && ids.every(id => Wn.__timelines && Wn.__timelines[id])) break;
       await sleep(25);
     }
-    if (!W.__player) throw new Error('HyperFrames 运行时没有启动');
-    const missing = ids.filter(id => !(W.__timelines || {})[id]); if (missing.length) throw new Error('这几幕没有注册时间线：' + missing.join(', '));
-    await Promise.all(Object.values((W.__hf || {}).buildReady || {}));
-    await W.document.fonts.ready;
-    P = W.__player; P.pause();
+    if (!Wn.__player) throw new Error('HyperFrames 运行时没有启动');
+    const missing = ids.filter(id => !(Wn.__timelines || {})[id]);
+    if (missing.length) throw new Error('这几幕没有注册时间线（window.__timelines["<id>"] = tl）：' + missing.join(', '));
+    await Promise.all(Object.values((Wn.__hf || {}).buildReady || {}));
+    await Wn.document.fonts.ready;
+    P = Wn.__player; P.pause();
   }
-  const render = t => P.seek(clamp(t, 0, T.total - 1e-3));   // the runtime snaps seeks to the film's frame grid (30 fps unless the root sets data-fps)
-  function fit() { $('vp-frame').style.transform = `scale(${$('stage').clientWidth / 1080})`; }
+  const render = t => P.seek(clamp(t, 0, T.total - 1e-3));   // the runtime snaps seeks to the film's frame grid (30 fps)
+  function fit() { $('vp-frame').style.transform = `scale(${$('stage').clientWidth / W})`; }
 
-  // voice: every clip mixed into one track at its place on the timeline (pm.js voiceTrack, without the music mix)
-  async function voiceTrack() {
+  // ---------- sound: voice clips + optional music, mixed into one track (pm.js voiceTrack / mixBgm, same numbers) ----------
+  async function mixTrack(rate = 24000) {
     const V = window.PM_VOICE, items = (T.voice || []).map(v => ({ ...v, clip: V && V.clips[v.say] })).filter(v => v.clip);
-    if (!items.length) return null;
-    const rate = 24000, ac = new OfflineAudioContext(1, 1, rate), out = new Float32Array(Math.ceil(T.total * rate));
+    if (!items.length && !window.PM_BGM) return null;
+    const ac = new OfflineAudioContext(1, 1, rate), out = new Float32Array(Math.ceil(T.total * rate));
+    const decode = async src => { const bytes = Uint8Array.from(atob(src.split(',')[1]), c => c.charCodeAt(0)), a = await ac.decodeAudioData(bytes.buffer);
+      if (a.numberOfChannels < 2) return a.getChannelData(0);
+      const m = new Float32Array(a.length); for (let c = 0; c < a.numberOfChannels; c++) { const d = a.getChannelData(c); for (let i = 0; i < m.length; i++) m[i] += d[i] / a.numberOfChannels; } return m; };
     for (const v of items) {
-      const bytes = Uint8Array.from(atob(v.clip.src.split(',')[1]), c => c.charCodeAt(0)), a = await ac.decodeAudioData(bytes.buffer), d = a.getChannelData(0), at = Math.round(v.t * rate);
+      const d = await decode(v.clip.src), at = Math.round(v.t * rate);
       for (let i = 0; i < d.length && at + i < out.length; i++) out[at + i] += d[i];
+    }
+    if (window.PM_BGM) {
+      try { mixBgm(out, await decode(window.PM_BGM.src), rate, window.PM_BGM.drop); }
+      catch (e) { console.warn('配乐解码失败，只放配音', e); }
     }
     const b = new DataView(new ArrayBuffer(44 + out.length * 2)), str = (o, s) => [...s].forEach((c, i) => b.setUint8(o + i, c.charCodeAt(0)));
     str(0, 'RIFF'); b.setUint32(4, 36 + out.length * 2, true); str(8, 'WAVEfmt '); b.setUint32(16, 16, true); b.setUint16(20, 1, true); b.setUint16(22, 1, true);
     b.setUint32(24, rate, true); b.setUint32(28, rate * 2, true); b.setUint16(32, 2, true); b.setUint16(34, 16, true); str(36, 'data'); b.setUint32(40, out.length * 2, true);
     out.forEach((v, i) => b.setInt16(44 + i * 2, clamp(v, -1, 1) * 32767, true));
-    return { url: URL.createObjectURL(new Blob([b], { type: 'audio/wav' })) };
+    return b.buffer;
+  }
+  // music under the voice, as pm.js mixBgm: the beat drop (found near 15 s, or --bgm-drop) lands at 0.3 s; a film longer
+  // than the track loops its loud body with a 2 s crossfade; the last 2.5 s fade out; 0.42, ducked to 0.12 under the voice
+  function movRms(x, w) {
+    const c = new Float64Array(x.length + 1); for (let i = 0; i < x.length; i++) c[i + 1] = c[i] + x[i] * x[i];
+    const h = w >> 1, r = new Float32Array(x.length);
+    for (let i = 0; i < x.length; i++) { const a = Math.max(0, i - h), b = Math.min(x.length, i - h + w); r[i] = Math.sqrt(Math.max(0, (c[b] - c[a]) / w)); }
+    return r;
+  }
+  function findDrop(m, rate, approx = 15) {
+    const hop = rate / 100, e = movRms(m, hop * 4), db = i => 20 * Math.log10((e[i * hop] || 0) + 1e-6);
+    const lo = Math.max(0, (approx - 4) * 100), hi = (approx - 1) * 100; if (hi * hop >= m.length) return 0;
+    const base = Array.from({ length: hi - lo }, (_, k) => db(lo + k)).sort((a, b) => a - b)[(hi - lo) >> 1];
+    for (let i = hi; i < (approx + 4) * 100 && i * hop < m.length; i++) if (db(i) > base + 12) return i / 100;
+    return approx;
+  }
+  function mixBgm(voice, src, rate, drop) {
+    const n = voice.length, dropAt = drop == null || drop === 'auto' ? findDrop(src, rate) : +drop, off = Math.round((dropAt - .3) * rate);
+    const e1 = movRms(src, rate); let end = src.length - 1; while (end > 0 && e1[end] <= .1) end--; end = Math.max(1, end - rate);
+    const music = new Float32Array(n), at = i => { const j = i + off; return j >= 0 && j < end ? src[j] : 0; };
+    let L = Math.max(0, Math.min(n, end - off)); for (let i = 0; i < L; i++) music[i] = at(i);
+    const xf = 2 * rate, b0 = Math.round(dropAt * rate), body = end - b0;
+    while (L < n && body > 2 * xf) {
+      const s = L - xf;
+      for (let k = 0; k < body && s + k < n; k++) { const v = src[b0 + k]; music[s + k] = k < xf ? music[s + k] * (1 - k / xf) + v * (k / xf) : v; }
+      L = s + body;
+    }
+    const fade = Math.round(2.5 * rate); for (let i = Math.max(0, n - fade); i < n; i++) music[i] *= (n - i) / fade;
+    const env = movRms(voice, rate / 100 * 3), step = rate / 1000; let g = 0, peak = 0;
+    for (let i0 = 0; i0 < n; i0 += step) {
+      const act = env[i0] > .01 ? 1 : 0; g += (act - g) * (act > g ? .6 : .06);
+      for (let i = i0; i < Math.min(n, i0 + step); i++) { voice[i] += music[i] * (.42 - .30 * g); peak = Math.max(peak, Math.abs(voice[i])); }
+    }
+    if (peak > .98) for (let i = 0; i < n; i++) voice[i] *= .98 / peak;
+    return { drop: dropAt };
   }
 
-  // the controls: pm.js player(), with render(t) = seek the HyperFrames timeline
+  // ---------- the controls: pm.js player(), with render(t) = seek the HyperFrames timeline ----------
   function player(track) {
     let t = 0, playing = false, last = 0, speed = 1;
-    const A = track ? new Audio(track.url) : null; let sound = !!A, blocked = false;
+    const A = track ? new Audio(track) : null; let sound = !!A, blocked = false;
     const audible = () => A && sound && speed <= 2 && !blocked;
     function syncAudio() {
       if (!A) return;
@@ -117,9 +164,9 @@ const VPP = (() => {
     if (A) { $('pm-snd').style.display = ''; $('pm-snd').onclick = () => { sound = !sound; $('pm-snd').textContent = sound ? '🔊' : '🔇'; syncAudio(); }; $('pm-keys').textContent += ' · M 开关声音'; }
     $('pm-title').textContent = (T.paper && T.paper.title) || '';
     $('pm-brand').textContent = BRAND; if (BRAND !== TOOL) $('pm-credit').textContent = BRAND + ' · ';
-    T.scenes.filter(s => !s.builtin).forEach(sc => {
+    T.scenes.filter(s => !s.builtin && s.chapter !== false).forEach(sc => {
       const b = document.createElement('button'); b.className = 'chap'; b.dataset.id = sc.id;
-      b.innerHTML = `<span>${String(sc.num).padStart(2, '0')}</span>${sc.name}`; b.onclick = () => seek(sc.t0 + .01);
+      b.innerHTML = `<span>${String(sc.num).padStart(2, '0')}</span>`; b.append(sc.name); b.onclick = () => seek(sc.t0 + .01);
       $('pm-chaps').appendChild(b);
       const k = document.createElement('i'); k.style.left = (sc.t0 / T.total * 100) + '%'; $('pm-ticks').appendChild(k);
     });
@@ -156,27 +203,34 @@ const VPP = (() => {
     return { seek, get t() { return t; }, setPlay, setSpeed: s => document.querySelector(`.spd[data-s="${s}"]`).click() };
   }
 
-  // ---------- self-check (?audit): pm.js runAudit's kinds and thresholds, measured on the composition's DOM ----------
-  // No screenshots: text boxes come from getBoundingClientRect inside the iframe, "did the picture change" from a
-  // fingerprint of every visible element (box, opacity, transform, colours, svg geometry). vp_hf_check.py reads the result.
-  function audit(q) {
-    const D = W.document, warns = [], seen = new Set(), cur = { t: 0, sc: '' };
+  // ---------- self-check (?audit): the Flash engine's kinds and thresholds, measured on the composition's DOM ----------
+  // No screenshots: text boxes come from getBoundingClientRect inside the iframe, "did the picture change" from a fingerprint
+  // of every visible element (box, opacity, transform, colours, svg geometry, a tiny copy of each canvas). check.py reads it.
+  function audit() {
+    const D = Wn.document, warns = [], seen = new Set(), cur = { t: 0, sc: '' };
     const warn = (kind, msg) => { const k = kind + cur.sc + msg; if (seen.has(k)) return; seen.add(k); warns.push({ t: +cur.t.toFixed(2), scene: cur.sc, kind, msg }); };
-    const SAFE = [20, 16, 1060, 1424], BOTTOM = 1190;
-    const alpha = el => { let a = 1; for (let e = el; e && e.nodeType === 1; e = e.parentElement) { const cs = W.getComputedStyle(e); if (cs.display === 'none' || cs.visibility === 'hidden') return 0; a *= +cs.opacity; } return a; };
-    const host = sc => D.getElementById(sc.id);
-    const textEls = h => [...h.querySelectorAll('*')].filter(e => [...e.childNodes].some(n => n.nodeType === 3 && n.textContent.trim()));
+    const SAFE = LY.safe, BOTTOM = LY.zone.bottom, portrait = LY.name === 'portrait', edge = portrait ? '超出安全区' : '超出画面';
+    const alpha = el => { let a = 1; for (let e = el; e && e.nodeType === 1; e = e.parentElement) { const cs = Wn.getComputedStyle(e); if (cs.display === 'none' || cs.visibility === 'hidden') return 0; a *= +cs.opacity; } return a; };
+    const host = sc => D.getElementById('vp-scene-' + sc.id);
+    const textEls = h => [...h.querySelectorAll('*')].filter(e => e.tagName !== 'SCRIPT' && e.tagName !== 'STYLE' && [...e.childNodes].some(n => n.nodeType === 3 && n.textContent.trim()));
+    const tiny = Wn.document.createElement('canvas'); tiny.width = tiny.height = 12; const tx = tiny.getContext('2d', { willReadFrequently: true });
+    const canvasPrint = c => { try { tx.clearRect(0, 0, 12, 12); tx.drawImage(c, 0, 0, 12, 12); return Array.from(tx.getImageData(0, 0, 12, 12).data, v => v >> 4).join(''); } catch (e) { return ''; } };
     const fp = h => [...h.querySelectorAll('*')].map(e => {
       const a = alpha(e); if (a < .02) return '';
-      const r = e.getBoundingClientRect(), cs = W.getComputedStyle(e);
+      const r = e.getBoundingClientRect(), cs = Wn.getComputedStyle(e);
       return [e.tagName, Math.round(r.x), Math.round(r.y), Math.round(r.width), Math.round(r.height), a.toFixed(2), cs.transform, cs.strokeDashoffset,
-        cs.fill, cs.stroke, cs.backgroundColor, cs.borderTopColor, e.getAttribute('cx'), e.getAttribute('cy'), e.getAttribute('r')].join(',');
+        cs.fill, cs.stroke, cs.backgroundColor, cs.color, cs.borderTopColor, e.getAttribute('d'), e.getAttribute('cx'), e.getAttribute('cy'), e.getAttribute('r'),
+        e.getAttribute('x'), e.getAttribute('y'), e.getAttribute('width'), e.tagName === 'CANVAS' ? canvasPrint(e) : ''].join(',');
     }).join('|');
     const at = t => { render(t); return t; };
     const scenes = T.scenes.filter(s => !s.builtin);
-    // 这句画面不动 / 画面静止 (pm.js: compare line start + .25 with line end − .1; a 6 s stretch with no change)
+    scenes.forEach(sc => { cur.sc = sc.id; if (!host(sc)) warn('报错', `合成里找不到这一幕：${sc.id}`); });
+    // 开场不动: the first scene has to move from frame 0 (compare 0 s with 0.6 s)
+    const s0 = scenes[0];
+    if (s0 && host(s0)) { cur.sc = s0.id; cur.t = 0; at(s0.t0); const a = fp(host(s0)); at(s0.t0 + .6); if (a === fp(host(s0))) warn('开场不动', '第 0–0.6 秒画面没有变化：开场第 0 秒就要动起来（线在画、点在走、图在变；整体淡入不算）'); }
+    // 这句画面不动 / 画面静止 (the Flash engine: compare line start + .25 with line end − .1; a 6 s stretch with no change)
     scenes.forEach(sc => {
-      cur.sc = sc.id; const h = host(sc); if (!h) { warn('报错', `合成里找不到这一幕：${sc.id}`); return; }
+      const h = host(sc); if (!h) return; cur.sc = sc.id;
       sc.lines.forEach((l, i) => { cur.t = sc.t0 + l.t0; at(sc.t0 + l.t0 + .25); const a = fp(h); at(sc.t0 + l.t1 - .1); if (a === fp(h)) warn('这句画面不动', `第 ${i + 1} 句「${l.text.replace(/\*\*/g, '').slice(0, 14)}…」从头到尾画面没变化`); });
       at(sc.t0 + .5); let prev = fp(h), run = 0, from = sc.t0 + .5;
       for (let t = sc.t0 + 1; t < sc.t0 + sc.dur - .4; t += .5) {
@@ -186,18 +240,28 @@ const VPP = (() => {
       }
       if (run >= 6) { cur.t = from; warn('画面静止', `${from.toFixed(1)}s 起 ${run.toFixed(1)}s 没有动（到本幕结束）`); }
     });
-    // 出界 / 字太小 / 压字幕 / 文字重叠, every 0.25 s
+    // 出界 / 字太小 / 压字幕 / 文字重叠 / 出处, every 0.25 s
     const ov = {};
     for (let t = 0; t < T.total; t += .25) {
       at(t); const sc = sceneAt(t); cur.t = t; cur.sc = sc.id; if (sc.builtin) continue;
+      const h = host(sc); if (!h) continue;
       const lt = t - sc.t0, capOn = sc.lines.some(l => lt >= l.t0 && lt < l.t1), items = [], nowOv = new Set();
-      textEls(host(sc)).forEach(e => {
+      textEls(h).forEach(e => {
         const a = alpha(e); if (a <= .05) return;
-        const r = e.getBoundingClientRect(), s = e.textContent.trim(), size = parseFloat(W.getComputedStyle(e).fontSize);
-        if (r.left < SAFE[0] || r.right > SAFE[2] || r.top < SAFE[1] || r.bottom > SAFE[3]) warn('出界', `「${s.slice(0, 16)}」超出画面`);
-        if (size < 22) warn('字太小', `「${s.slice(0, 16)}」只有 ${size}px`);
+        const r = e.getBoundingClientRect(); if (r.width < 1 || r.height < 1) return;
+        const s = e.textContent.trim(), k = e.offsetHeight ? r.height / e.offsetHeight : 1, size = Math.round(parseFloat(Wn.getComputedStyle(e).fontSize) * k * 10) / 10;
+        const note = !!e.closest('.vp-source, [data-vp-note]');
+        if (r.left < SAFE[0] || r.right > SAFE[2] || r.top < SAFE[1] || r.bottom > SAFE[3]) warn('出界', `「${s.slice(0, 16)}」${edge}`);
+        if (size < (note ? 20 : 22)) warn('字太小', `「${s.slice(0, 16)}」只有 ${size}px`);
         if (capOn && r.bottom > BOTTOM + 20) warn('压字幕', `「${s.slice(0, 12)}」伸进字幕区（y>${BOTTOM}）`);
         if (a > .9) items.push({ s, r });
+      });
+      h.querySelectorAll('img').forEach(im => {
+        const a = alpha(im), r = im.getBoundingClientRect(); if (a <= .05 || r.width < 40 || r.height < 40 || im.closest('[data-no-source]')) return;
+        if (r.left < SAFE[0] - 2 || r.right > SAFE[2] + 2 || r.top < SAFE[1] - 2 || r.bottom > SAFE[3] + 2) warn('出界', `图片 ${Math.round(r.width)}×${Math.round(r.height)} ${edge}`);
+        if (capOn && r.bottom > BOTTOM + 20) warn('压字幕', `图片伸进字幕区（y>${BOTTOM}）`);
+        const fig = im.closest('.vp-figure'), src = fig && fig.querySelector('.vp-source');
+        if (!src || !src.textContent.trim() || alpha(src) <= .05) warn('出处', '画面上有一张图没写出处：用 VP.figure(...) 或 <figure class="vp-figure"> 包住它，里面放 <figcaption class="vp-source">图：论文 Figure N</figcaption>（装饰图加 data-no-source）');
       });
       for (let i = 0; i < items.length; i++) for (let j = i + 1; j < items.length; j++) {
         const A = items[i], B = items[j], ix = Math.min(A.r.right, B.r.right) - Math.max(A.r.left, B.r.left), iy = Math.min(A.r.bottom, B.r.bottom) - Math.max(A.r.top, B.r.top);
@@ -207,23 +271,28 @@ const VPP = (() => {
       }
       for (const k in ov) if (!nowOv.has(k)) delete ov[k];
     }
-    (W.VP_CHROME_WARN || []).forEach(w => { cur.sc = w.scene; warn(w.kind, w.msg); });
-    // contact sheet times: the moment each caption line finishes (pm.js), captured by `hyperframes snapshot`
+    (Wn.VP_CHROME_WARN || []).forEach(w => { cur.sc = w.scene; cur.t = 0; warn(w.kind, w.msg); });
+    // contact sheet times: the moment each caption line finishes (the Flash engine), captured by `hyperframes snapshot`
     const shots = [];
-    T.scenes.forEach(sc => { if (sc.builtin) shots.push([+(sc.t0 + sc.dur - .4).toFixed(2), '片尾']); else sc.lines.forEach((l, i) => shots.push([+(sc.t0 + l.t1 - .25).toFixed(2), `${String(sc.num).padStart(2, '0')}·${i + 1}`])); });
+    T.scenes.forEach(sc => { if (sc.builtin) shots.push([+(sc.t0 + sc.dur - .4).toFixed(2), '片尾']); else sc.lines.forEach((l, i) => shots.push([+(sc.t0 + l.t1 - .25).toFixed(2), `${sc.chapter === false ? sc.id : String(sc.num).padStart(2, '0')}·${i + 1}`])); });
     const pre = document.createElement('pre'); pre.id = 'vp-audit'; pre.textContent = JSON.stringify({ total: T.total, warnings: warns, shots }); document.body.appendChild(pre);
   }
 
   async function boot() {
-    document.documentElement.style.setProperty('--ar', 1080 / 1440);
+    document.documentElement.style.setProperty('--ar', W / H);
     const q = new URLSearchParams(location.search);
-    if (q.has('still') || q.has('audit')) document.body.className = 'still';
+    if (q.has('mixdown')) {   // build.py --mp4: the page's own mix, so the video sounds like the page
+      const buf = await mixTrack(+q.get('rate') || 48000), pre = document.createElement('pre'); pre.id = 'vp-mix';
+      if (buf) { const u = new Uint8Array(buf); let s = ''; for (let i = 0; i < u.length; i += 32768) s += String.fromCharCode.apply(null, u.subarray(i, i + 32768)); pre.textContent = btoa(s); }
+      document.body.appendChild(pre); return;
+    }
+    if (q.has('still') || q.has('audit')) { document.body.className = 'still'; $('stage').style.width = W + 'px'; $('stage').style.height = H + 'px'; }
     fit(); addEventListener('resize', fit);
     await mount();
-    if (q.has('audit')) return audit(q);
+    if (q.has('audit')) return audit();
     if (q.has('still')) { render(+q.get('t') || 0); document.title = 'READY'; return; }
     let track = null;
-    try { track = await voiceTrack(); } catch (e) { console.error('配音音轨合成失败，改为无声播放', e); }
+    try { const b = await mixTrack(); if (b) track = URL.createObjectURL(new Blob([b], { type: 'audio/wav' })); } catch (e) { console.error('配音音轨合成失败，改为无声播放', e); }
     window.VP_PLAYER = player(track);
     window.VP_READY = true;
   }
