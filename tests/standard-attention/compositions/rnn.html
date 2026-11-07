@@ -1,0 +1,84 @@
+<!-- 第 1 幕 · 老办法：RNN 只能一个词一个词地传
+     Every action hangs on a caption line: S.L(i) / S.Le(i) come from window.VP_TIMING (build.py), so with a voice-over
+     the moves follow the voice exactly like g.L(i) in pm.js. -->
+<template>
+  <style>
+    #root { position: absolute; inset: 0; }
+    #rnn-stage { position: absolute; inset: 0; font-family: "VP Sans", sans-serif; color: #F4F3EF; }
+    #rnn-svg { position: absolute; left: 0; top: 0; overflow: visible; }
+    #rnn-stage .tok { position: absolute; border: 2px solid #3A3A42; border-radius: 12px; background: #15151A;
+      font-size: 38px; font-weight: 700; display: flex; align-items: center; justify-content: center; white-space: nowrap; }
+    #rnn-stage .lbl { position: absolute; white-space: nowrap; font-weight: 600; }
+    #rnn-stage .core { position: absolute; width: 72px; height: 72px; border-radius: 10px; background: #15151A; border: 2px solid #3A3A42; }
+  </style>
+  <div id="root" data-composition-id="rnn" data-width="1080" data-height="1440">
+    <div id="rnn-stage">
+      <svg id="rnn-svg" width="1080" height="1440" viewBox="0 0 1080 1440"></svg>
+    </div>
+    <script>
+      (async () => {
+        const S = VP.scene('rnn'), { L } = S, F = window.FILM, C = F.COL;
+        await VP.fontsReady;
+        const stage = document.getElementById('rnn-stage'), svg = document.getElementById('rnn-svg');
+        const tl = gsap.timeline({ paused: true });
+        const R = F.sentence(stage, 250, 200, 'rnn');
+        const M = R.map(r => [r.cx, r.bottom + 70]);   // a memory cell under every word
+        const n = 12, dt = 4.6 / n, run0 = L(1);       // a "memory" dot walks the chain in 4.6 s from line 2
+        // chain: a faint track, the walked part (sub), turned orange on Law → its from line 3
+        for (let i = 0; i < n; i++) {
+          const a = M[i], b = M[i + 1], jump = i === 6;   // 6 → 7 jumps to the second row
+          const g = jump ? F.curveD(a, b, -160) : { d: `M${a[0] + 24},${a[1]} L${b[0] - 24},${b[1]}`, mid: [(a[0] + b[0]) / 2, a[1]] };
+          F.svg(svg, 'path', { d: g.d, fill: 'none', stroke: F.rgba(C.sub, .25), 'stroke-width': 3, 'stroke-dasharray': jump ? '6 8' : 'none' });
+          const p = F.svg(svg, 'path', { d: g.d, fill: 'none', stroke: C.sub, 'stroke-width': 4, 'stroke-linecap': 'round' }), dr = F.drawOn(p);
+          tl.fromTo(p, dr.from, { ...dr.to, duration: dt, ease: 'none' }, run0 + i * dt);
+          if (i >= F.LAW && i < F.ITS) {
+            tl.to(p, { stroke: C.acc, duration: .3 }, L(2));
+            const at = jump ? [g.mid[0], g.mid[1] + 30] : [g.mid[0], g.mid[1] - 26];
+            const num = F.label(stage, `rnn-step${i}`, String(i), at[0], at[1], { size: 24, color: C.acc });
+            tl.fromTo(num, { opacity: 0 }, { opacity: 1, duration: .3 }, L(2) + (i - 1) * .25);
+          }
+        }
+        // cells and the stems from each word, one after another on line 1; a cell lights up when the dot gets there
+        M.forEach(([x, y], i) => {
+          const stem = F.svg(svg, 'path', { d: `M${x},${R[i].bottom + 4} L${x},${y - 24}`, stroke: C.faint, 'stroke-width': 3, fill: 'none' }), ds = F.drawOn(stem);
+          tl.fromTo(stem, ds.from, { ...ds.to, duration: .3, ease: 'none' }, L(0) + .6 + i * .3);
+          const c = F.svg(svg, 'circle', { cx: x, cy: y, r: 22, fill: C.panel, stroke: C.faint, 'stroke-width': 3 });
+          tl.fromTo(c, { opacity: 0 }, { opacity: 1, duration: .3 }, L(0) + .6 + i * .3);
+          tl.to(c, { attr: { fill: F.rgba(C.acc, .25), stroke: C.acc }, duration: .15 }, run0 + Math.max(0, i - .05) * dt);
+        });
+        R.forEach((r, i) => tl.fromTo(r.el, { opacity: 0 }, { opacity: 1, duration: .3 }, L(0) + .4 + i * .3));
+        [F.LAW, F.ITS].forEach(i => tl.to(R[i].el, { borderColor: C.acc, borderWidth: 4, duration: .25 }, L(2)));
+        const mem = F.label(stage, 'rnn-mem', '记忆', M[0][0] - 2, M[0][1] + 52, { size: 24, color: C.dim });
+        tl.fromTo(mem, { opacity: 0 }, { opacity: 1, duration: .4 }, L(1));
+        // the walking dot: stays on cell 6 while the line jumps rows, then lands on 7
+        const dot = F.svg(svg, 'circle', { cx: M[0][0], cy: M[0][1], r: 12, fill: C.acc, opacity: 0 });
+        tl.set(dot, { opacity: 1 }, run0);
+        for (let i = 0; i < n; i++) {
+          if (i === 6) tl.set(dot, { attr: { cx: M[7][0], cy: M[7][1] } }, run0 + 7 * dt);
+          else tl.fromTo(dot, { attr: { cx: M[i][0], cy: M[i][1] } }, { attr: { cx: M[i + 1][0], cy: M[i + 1][1] }, duration: dt, ease: 'none', immediateRender: false }, run0 + i * dt);
+        }
+        const chip = F.chip(stage, 'rnn-chip', 'Law → its：**7 步**', 540, 860, { size: 34 });
+        tl.fromTo(chip, { opacity: 0 }, { opacity: 1, duration: .4 }, L(2) + 1.8);
+        tl.to(chip, { opacity: 0, duration: .3 }, L(3));
+        // GPU cores: only one is ever busy (line 4)
+        const gt = F.label(stage, 'rnn-gpu', '8 个 GPU 核心（示意）', 540, 905, { size: 28, color: C.sub });
+        tl.fromTo(gt, { opacity: 0 }, { opacity: 1, duration: .4 }, L(3));
+        const cores = Array.from({ length: 8 }, (_, k) => {
+          const el = document.createElement('div'); el.className = 'core'; el.id = `rnn-core${k}`;
+          Object.assign(el.style, { left: `${180 + k * 92}px`, top: '950px' }); stage.appendChild(el);
+          tl.fromTo(el, { opacity: 0 }, { opacity: 1, duration: .4 }, L(3)); return el;
+        });
+        for (let s = 0; L(3) + s * .45 < S.dur; s++) {
+          tl.set(cores[s % 8], { backgroundColor: C.acc }, L(3) + s * .45);
+          if (s) tl.set(cores[(s - 1) % 8], { backgroundColor: C.panel }, L(3) + s * .45);
+        }
+        const msg = F.label(stage, 'rnn-msg', '同一时刻只有 1 个在干活', 540, 1080, { size: 30, color: C.acc });
+        tl.fromTo(msg, { opacity: 0 }, { opacity: 1, duration: .4 }, L(3) + 1.2);
+        // scene fade in / out (pm.js render: .35 s in, .3 s out)
+        tl.fromTo(stage, { opacity: 0 }, { opacity: 1, duration: .35, ease: 'none' }, 0);
+        tl.to(stage, { opacity: 0, duration: .3, ease: 'none' }, S.dur - .3);
+        window.__timelines['rnn'] = tl;
+      })();
+    </script>
+  </div>
+</template>

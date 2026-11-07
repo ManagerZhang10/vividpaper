@@ -1,0 +1,26 @@
+<!-- VividPaper 标准版 · 一幕的最小骨架。复制成 compositions/<id>.html，把 __ID__ 全部换成这一幕的 id（和 film.json 里一致）。
+     画面怎么做看 HyperFrames 自带的 skill（node_modules/hyperframes/dist/skills/hyperframes/SKILL.md）；这里只放合同：
+     - 一个 paused 的 GSAP 时间线，建完登记到 window.__timelines["__ID__"]；不读真实时间、不用无种子的随机数；
+     - 动作挂在字幕上：VP.scene('__ID__').L(i) 是第 i 句字幕开始的秒数（本幕内），Le(i) 结束，at(i, .6) 念到六成；
+     - 内容放在 VP.layout.zone.top 到 zone.bottom 之间（再往下是字幕区），竖屏只用 VP.layout.safe 里的区域；
+     - 论文原图用 VP.figure(...) 放，自动写出处；示意数字旁写「示意」。 -->
+<template>
+  <style>
+    #root { position: absolute; inset: 0; }
+    #__ID__-stage { position: absolute; inset: 0; font-family: "VP Sans", sans-serif; color: #F4F3EF; }
+  </style>
+  <div id="root" data-composition-id="__ID__">
+    <div id="__ID__-stage"></div>
+    <script>
+      (async () => {
+        await VP.fontsReady;
+        const S = VP.scene('__ID__'), { L } = S, Y = VP.layout;
+        const stage = document.getElementById('__ID__-stage'), tl = gsap.timeline({ paused: true });
+        // … build the picture here, one motion per caption line: tl.fromTo(el, {...}, {...}, L(0) + .3)
+        tl.fromTo(stage, { opacity: 0 }, { opacity: 1, duration: .35, ease: 'none' }, 0);
+        tl.to(stage, { opacity: 0, duration: .3, ease: 'none' }, S.dur - .3);
+        window.__timelines['__ID__'] = tl;
+      })();
+    </script>
+  </div>
+</template>

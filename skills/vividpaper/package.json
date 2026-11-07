@@ -1,0 +1,12 @@
+{
+  "name": "vividpaper-standard",
+  "private": true,
+  "description": "VividPaper 标准版（HyperFrames 画画面）的依赖。Flash 版不用它；只在用标准版时装：python3 scripts/standard.py install",
+  "license": "MIT",
+  "engines": { "node": ">=22" },
+  "dependencies": {
+    "@fontsource-variable/noto-sans-sc": "5.3.1",
+    "gsap": "3.15.0",
+    "hyperframes": "0.9.19"
+  }
+}

@@ -1,0 +1,7 @@
+/* VividPaper standard engine: the few classes the contract needs. build.py inlines this into index.html (after the
+   @font-face rules for VP Sans). Override freely in assets/film.css. */
+/* a paper figure on a white card with its source underneath (VP.figure builds this markup) */
+.vp-figure { position: absolute; margin: 0; }
+.vp-figure > img { display: block; width: 100%; height: auto; box-sizing: border-box; padding: 14px; background: #fff; border-radius: 14px; }
+.vp-figure > .vp-source { position: absolute; right: 0; top: 100%; margin-top: 8px; white-space: nowrap;
+  font: 400 22px "VP Sans", sans-serif; color: #8A8A92; }
