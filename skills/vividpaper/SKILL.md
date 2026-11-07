@@ -56,7 +56,7 @@ python3 $PM/scripts/standard.py doctor
    - **裁完一定打开看一眼**：子图小标题被切、带进了图注或旁边一栏的正文，都要重裁。
    - Flash 版 `figures/` 里的每张图都会打进 HTML，没用到的删掉；文件名以 `_` 开头的不打包。
 4. **写画面**：
-   - **标准版**：`python3 $PM/scripts/standard.py new <短名> [--layout portrait|landscape]` 起骨架（film.json + 片头、一幕、回顾三个模板），然后写 `film.json`（每一幕的字幕）和 `compositions/<id>.html`（每一幕的画面）。合同照 `references/standard.md`：时间线 paused、动作挂在 `VP.scene(id).L(i)` 上、不读真实时间、论文原图用 `VP.figure` 带出处、字体用 VP Sans。画面设计照 HyperFrames 自带的 skill 做。
+   - **标准版**：`python3 $PM/scripts/standard.py new <短名> [--layout portrait|landscape]` 起骨架（film.json + 片头、一幕、回顾三个模板），然后写 `film.json`（每一幕的字幕）和 `compositions/<id>.html`（每一幕的画面）。合同照 `references/standard.md`：时间线 paused、动作挂在 `VP.scene(id).L(i)` 上、不读真实时间、论文原图用 `VP.figure` 带出处、字体用 VP Sans。画面设计照 HyperFrames 自带的 skill 做。不要拿 Flash 版范例 `references/example-attention.js` 或 `examples/` 里的旧片子当画面参考：同一段内容盲测，参考了旧片的标准版不如完全不参考的。
    - **Flash 版**：写 `<短名>/film.js`，照 `references/api.md` 的接口和 `references/craft.md` 的画法规则写。完整范例：`references/example-attention.js`（Attention Is All You Need），先通读一遍再动笔。
    - 片尾回顾 3–4 条，**新片默认每条配一个小动效**，画那一幕机制的简化版，文字压到一行（≤ 12 字）。Flash 版条目写成 `{ text, draw(g, box, u) }`（api.md「回顾小动效」、craft.md 第 7 条）；标准版画在回顾模板的 `#recap-box-<i>` 里。
    - `craft.md` 讲内容的几节（主线、真图真数、术语、时长）两个版本都照做。
